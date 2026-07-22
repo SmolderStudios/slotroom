@@ -60235,7 +60235,7 @@ function buildTextures() {
    quantised to a grid and the whole world shimmered when you moved.
    Reproduced by rounding the vertex in NDC after projection. */
 
-function psx(mat, grid = 130) {
+function psx(mat, grid = 190) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uGrid = { value: grid };
     shader.vertexShader =
@@ -60278,11 +60278,11 @@ scene.fog    = new THREE.FogExp2(0x0e0705, 0.105);
 const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 60);
 
 /* --- internal render resolution: this is what makes it chunky --- */
-/* Raised from 264. Enough to make the wall signs readable from across the
-   room without losing the crunch — the dither and noise below were also
-   eased slightly. Any higher and it stops looking like hardware. */
-const BASE_H = 312;
-let RW = 554, RH = BASE_H;
+/* Raised to 460 (from 312/264): the low res was fine close up but turned the
+   far side of the room into unreadable mush. This keeps the crunch — nearest
+   textures, scanlines, snap — while distant geometry actually resolves. */
+const BASE_H = 460;
+let RW = 818, RH = BASE_H;
 
 const rtOpts = { magFilter: THREE.NearestFilter, minFilter: THREE.NearestFilter, generateMipmaps: false };
 const rtScene = new THREE.WebGLRenderTarget(RW, RH, { ...rtOpts, depthBuffer: true });
