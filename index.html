@@ -60640,33 +60640,43 @@ function buildLamp() {
    The cabinet is modelled at full arcade size and scaled down onto a table,
    so every internal dimension stays in one unit and only MACHINE_SCALE
    changes the footprint. */
-const MACHINE_SCALE = 0.40;
-const TABLE = { h: 0.76, w: 2.15, d: 0.86 };
-const MACHINE_XS = [-1.62, 1.62];            /* the two stations */
+/* The machine is now the delivered slotmachine.glb — a large, floor-standing
+   gothic cabinet you SIT at (no more tabletop). Everything is measured in real
+   metres against the model, which Tripo normalises to 1.0 unit tall before
+   fitInstance scales it to H_MACH. Measured on the model face (see sm_grid):
+   the reel window centres at 0.505 of its height, the marquee readout at 0.655,
+   and the front face is half its depth (0.135) out from centre. */
+const TABLE = { h: 0.76 };                   /* kept: charm-rack token height */
+const MACHINE_XS = [-1.66, 1.66];            /* the two stations */
+const H_MACH    = 2.04;                       /* machine height, metres */
+const SCREEN_Y  = 0.512 * H_MACH;             /* reel-window centre (world Y) */
+const READOUT_Y = 0.655 * H_MACH;             /* marquee readout centre */
+const FACE_Z    = 0.135 * H_MACH;             /* front face, from machine centre */
 
 const MACHINES = [];
 let myMachine = null;                        /* the one this client owns */
 
 function machineSpec(idx) {
   const x = MACHINE_XS[idx];
-  const tableZ = -ROOM.d / 2 + 0.52;
-  const at = new THREE.Vector3(x - 0.42, TABLE.h, tableZ);
+  const side = idx === 0 ? -1 : 1;           /* which way the furniture extends */
+  const z = -ROOM.d / 2 + 0.46;              /* stood flush-ish to the north wall */
+  const at = new THREE.Vector3(x, 0, z);     /* group origin is on the FLOOR now */
   return {
-    idx, x, tableZ, at,
-    rackX: x + 0.62,
-    leverWorld: new THREE.Vector3(
-      at.x + 1.5 * MACHINE_SCALE, at.y + 1.18 * MACHINE_SCALE, at.z + 0.2 * MACHINE_SCALE),
-    screenAt: new THREE.Vector3(
-      at.x, at.y + 1.70 * MACHINE_SCALE, at.z + 0.55 * MACHINE_SCALE),
+    idx, x, side, tableZ: z, at,
+    rackX: x + side * 0.58,                   /* charm tray, machine side */
+    cabinetX: x + side * 1.20,               /* hutch + chest, outer side */
+    leverWorld: new THREE.Vector3(x - side * 0.33, SCREEN_Y - 0.36, z + FACE_Z - 0.01),
+    screenAt: new THREE.Vector3(x, SCREEN_Y, z + FACE_Z + 0.02),
   };
 }
 
-/* where the camera sits once you step up to a given machine */
+/* where the camera sits once you SIT DOWN at a given machine — lower eye-line,
+   close to the glass, tilted down at the reels */
 function focusPosOf(m) {
-  return new THREE.Vector3(m.screenAt.x, 1.40, m.screenAt.z + 0.98);
+  return new THREE.Vector3(m.screenAt.x, 1.16, m.screenAt.z + 0.82);
 }
 const FOCUS_YAW   = 0;
-const FOCUS_PITCH = -0.10;
+const FOCUS_PITCH = -0.17;
 
 /* charms are placed ON a machine, so effects are read per machine */
 function buff(m, field, key) {
@@ -60701,6 +60711,59 @@ function buffRoom(field) {
   return v;
 }
 
+/* A low round stool you sit on to play. Sitting is really the focus-camera;
+   the stool just makes the seat read as a place, not a hover. */
+function buildStool(x, z) {
+  const wood = lam({ map: TEX.wood, color: 0x6a5240 });
+  const iron = lam({ map: TEX.metal, color: 0x3a332c });
+  const g = new THREE.Group();
+  const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.225, 0.06, 12), wood);
+  seat.position.y = 0.47; g.add(seat);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.018, 5, 12),
+    lam({ map: TEX.metal, color: 0x4a4038 }));
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0.20; g.add(ring);
+  for (let i = 0; i < 3; i++) {
+    const a = i / 3 * Math.PI * 2;
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.47, 6), iron);
+    leg.position.set(Math.cos(a) * 0.15, 0.235, Math.sin(a) * 0.15);
+    leg.rotation.z = -Math.cos(a) * 0.13; leg.rotation.x = Math.sin(a) * 0.13;
+    g.add(leg);
+  }
+  g.position.set(x, 0, z); scene.add(g);
+  return g;
+}
+
+/* The winch drum the ankle-chain feeds off — a horizontal spool bolted to the
+   machine base, wrap links and a ratchet. updateChains anchors the chain to its
+   top, so the chain visibly pays out of the drum as you walk away. */
+function buildChainDrum(x, z) {
+  const g = new THREE.Group();
+  const steel = lam({ map: TEX.metal, color: 0x5a5048 });
+  const dark  = lam({ map: TEX.metal, color: 0x322c26 });
+  const linkM = lam({ map: TEX.metal, color: 0x6b6660 });
+  [-1, 1].forEach(s => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.36, 0.11), dark);
+    post.position.set(s * 0.185, 0.18, 0); g.add(post);
+  });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.32, 12), steel);
+  barrel.rotation.z = Math.PI / 2; barrel.position.y = 0.32; g.add(barrel);
+  [-1, 1].forEach(s => {
+    const f = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.145, 0.03, 12), dark);
+    f.rotation.z = Math.PI / 2; f.position.set(s * 0.165, 0.32, 0); g.add(f);
+  });
+  for (let i = 0; i < 6; i++) {
+    const l = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.02, 4, 8), linkM);
+    l.position.set(-0.12 + i * 0.048, 0.32, 0);
+    l.rotation.y = Math.PI / 2; if (i % 2) l.rotation.x = Math.PI / 2;
+    g.add(l);
+  }
+  const ratchet = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 10), dark);
+  ratchet.rotation.z = Math.PI / 2; ratchet.position.set(0.19, 0.32, 0); g.add(ratchet);
+  g.position.set(x, 0, z); scene.add(g);
+  blocker(x, z, 0.44, 0.34);
+  return g;
+}
+
 function buildMachine(idx) {
   const m = machineSpec(idx);
   m.charms = [];
@@ -60710,50 +60773,30 @@ function buildMachine(idx) {
   m.reels = { ctx: null, tex: null, cols: [], spinning: false, wins: [],
               winAmount: 0, winLabel: '', flash: 0, tickT: 0 };
 
+  /* holder sits on the FLOOR at the station. The model, the fallback box and the
+     two live canvases are all children in real-world metres — no group scale, so
+     fitInstance alone owns the model's size. */
   const g = new THREE.Group();
-  const matCab   = lam({ map: TEX.cab,   color: 0xb09088 });
-  const matBrass = lam({ map: TEX.brass, color: 0xc0a880 });
-  const matDark  = lam({ map: TEX.metal, color: 0x4a4038 });
-  const matTrim  = lam({ map: TEX.metal, color: 0x8a7458 });
-  const mk = (w, h, d, mat, x, y, z) => { const b = box(w, h, d, mat, x, y, z); g.add(b); return b; };
+  g.position.copy(m.at);
+  scene.add(g);
+  m.group = g;
 
-  /* ---- plinth, with a kick panel and feet ---- */
-  mk(2.45, 0.42, 1.15, matDark, 0, 0.21, 0);
-  mk(2.20, 0.10, 0.06, matBrass, 0, 0.06, 0.56);
-  [-1, 1].forEach(s => mk(0.16, 0.08, 0.16, matDark, s * 1.05, 0.04, 0.45));
+  const matCab  = lam({ map: TEX.cab,   color: 0x7a5f56 });
+  const matDark = lam({ map: TEX.metal, color: 0x322c26 });
+  const brass   = lam({ map: TEX.brass, color: 0xc0a880 });
 
-  /* ---- body ---- */
-  mk(2.30, 2.15, 1.00, matCab, 0, 1.42, 0);
-  /* shoulder bevels so it isn't a plain slab */
-  [-1, 1].forEach(s => {
-    const b = mk(0.26, 2.15, 0.30, matCab, s * 1.09, 1.42, 0.36);
-    b.rotation.y = -s * 0.55;
-  });
-  /* side vent grilles */
-  [-1, 1].forEach(s => {
-    for (let i = 0; i < 5; i++) {
-      mk(0.04, 0.05, 0.42, matDark, s * 1.16, 1.05 + i * 0.085, -0.16);
-    }
-  });
-  /* rivet line down each front edge */
-  [-1, 1].forEach(s => {
-    for (let i = 0; i < 7; i++) {
-      const r = new THREE.Mesh(new THREE.SphereGeometry(0.028, 5, 4), matBrass);
-      r.position.set(s * 1.10, 0.60 + i * 0.26, 0.49); g.add(r);
-    }
-  });
+  /* ---- fallback cabinet: a plain shaped box so the room still reads as a slot
+     machine if slotmachine.glb never loads. Hidden the instant it does. ---- */
+  const fb = new THREE.Group();
+  const fbBody = new THREE.Mesh(new THREE.BoxGeometry(0.60, H_MACH, 0.52), matCab);
+  fbBody.position.y = H_MACH / 2; fb.add(fbBody);
+  const fbFace = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.44, 0.06), matDark);
+  fbFace.position.set(0, SCREEN_Y, 0.26); fb.add(fbFace);
+  g.add(fb);
+  m.fallback = fb;
 
-  /* recessed black face the reels sit inside */
-  mk(1.90, 1.24, 0.10, matDark, 0, 1.70, 0.47);
-
-  /* orange frame around the reel window */
-  const frame = lam({ color: 0xd97a14, emissive: 0x3a1a00, emissiveIntensity: 0.5 });
-  mk(1.74, 0.07, 0.06, frame, 0, 2.30, 0.54);
-  mk(1.74, 0.07, 0.06, frame, 0, 1.10, 0.54);
-  mk(0.07, 1.27, 0.06, frame, -0.84, 1.70, 0.54);
-  mk(0.07, 1.27, 0.06, frame,  0.84, 1.70, 0.54);
-
-  /* ---- reel screen ---- */
+  /* ---- reel screen: the live 5x3 canvas, overlaid on the model's blank window.
+     Model-agnostic — same spot over the glb or the fallback box. ---- */
   const rc = document.createElement('canvas');
   rc.width = 320; rc.height = 224;
   m.reels.ctx = rc.getContext('2d');
@@ -60762,13 +60805,13 @@ function buildMachine(idx) {
   m.reels.tex.minFilter = THREE.NearestFilter;
   m.reels.tex.generateMipmaps = false;
   m.reels.tex.colorSpace = THREE.SRGBColorSpace;
-
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.62, 1.10),
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.43, 0.285),
     new THREE.MeshBasicMaterial({ map: m.reels.tex }));
-  screen.position.set(0, 1.70, 0.55);
+  screen.position.set(0, SCREEN_Y, FACE_Z + 0.022);
   g.add(screen);
+  m.reelPlane = screen;
 
-  /* ---- win readout ---- */
+  /* ---- win readout: overlaid on the marquee ---- */
   const tc = document.createElement('canvas');
   tc.width = 256; tc.height = 64;
   m.topCtx = tc.getContext('2d');
@@ -60777,167 +60820,46 @@ function buildMachine(idx) {
   m.topTex.minFilter = THREE.NearestFilter;
   m.topTex.generateMipmaps = false;
   m.topTex.colorSpace = THREE.SRGBColorSpace;
-
-  mk(1.85, 0.34, 0.10, matDark, 0, 2.58, 0.47);
-  const topScreen = new THREE.Mesh(new THREE.PlaneGeometry(1.66, 0.30),
+  const topScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.108),
     new THREE.MeshBasicMaterial({ map: m.topTex }));
-  topScreen.position.set(0, 2.58, 0.55);
+  topScreen.position.set(0, READOUT_Y, FACE_Z + 0.022);
   g.add(topScreen);
-  /* hood over the readout, with two bulbs under it */
-  const hood = mk(1.95, 0.06, 0.34, matBrass, 0, 2.80, 0.42);
-  hood.rotation.x = 0.22;
-  [-0.62, 0.62].forEach(x => {
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5),
-      new THREE.MeshBasicMaterial({ color: 0xffd9a0 }));
-    b.position.set(x, 2.72, 0.50); g.add(b);
-  });
+  m.readoutPlane = topScreen;
 
-  /* ---- control deck: the angled shelf you actually stand at ---- */
-  const deck = mk(2.16, 0.10, 0.56, matDark, 0, 0.62, 0.76);
-  deck.rotation.x = -0.40;
-  const deckTrim = mk(2.22, 0.05, 0.08, matBrass, 0, 0.52, 0.98);
-  deckTrim.rotation.x = -0.40;
-  /* underside so it doesn't read as a floating slab */
-  const deckUnder = mk(2.10, 0.26, 0.10, matCab, 0, 0.44, 0.84);
-  deckUnder.rotation.x = 0.32;
-
-  /* buttons — the row of lit plastic that says "slot machine" more than
-     anything else on the box */
-  const BTN = [
-    [-0.78, 0xd8261e], [-0.44, 0xd8261e], [-0.10, 0xe8a01a],
-    [ 0.24, 0x2ec46a], [ 0.62, 0x2ec46a], [ 0.96, 0xf2d21a],
-  ];
-  BTN.forEach(([bx, col], i) => {
-    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.115, 0.05, 10), matDark);
-    seat.rotation.x = Math.PI / 2 - 0.42;
-    seat.position.set(bx, 0.668, 0.815);
-    g.add(seat);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.088, 0.045, 10),
-      new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.30 }));
-    psx(cap.material);
-    cap.rotation.x = Math.PI / 2 - 0.42;
-    cap.position.set(bx, 0.681, 0.840);
-    g.add(cap);
-    if (i === 5) m.spinButton = cap;      /* pulses when a spin is available */
-  });
-
-  /* bill acceptor + card reader, right of the buttons */
-  mk(0.28, 0.34, 0.16, matDark,  1.40, 0.90, 0.60);
-  mk(0.20, 0.04, 0.04, matBrass, 1.40, 1.00, 0.69);
-  mk(0.15, 0.18, 0.05, lam({ color: 0x1b2430 }), 1.40, 0.86, 0.69);
-  mk(0.08, 0.03, 0.05, figMat(0x3fe08a, 0.9), 1.40, 0.78, 0.70);
-
-  /* coin slot and payout tray */
-  mk(0.28, 0.05, 0.05, matBrass, -1.40, 1.00, 0.60);
-  mk(0.24, 0.03, 0.03, matDark,  -1.40, 1.00, 0.63);
-  const trayLip = mk(0.74, 0.08, 0.22, matBrass, -0.02, 0.24, 0.70);
-  trayLip.rotation.x = -0.18;
-  mk(0.68, 0.05, 0.18, matDark, -0.02, 0.22, 0.72);
-
-  /* ---- belly glass ---- */
-  mk(1.70, 0.32, 0.06, matDark, 0, 0.92, 0.50);
-  const belly = new THREE.Mesh(new THREE.PlaneGeometry(1.58, 0.26),
-    new THREE.MeshBasicMaterial({ map: TEX.belly }));
-  belly.position.set(0, 0.92, 0.535);
-  g.add(belly);
-  [[-0.86, 0], [0.86, 0]].forEach(([bx]) =>
-    mk(0.05, 0.36, 0.05, matBrass, bx, 0.92, 0.53));
-
-  /* ---- speaker grilles either side of the readout ---- */
-  [-1, 1].forEach(sx => {
-    mk(0.30, 0.30, 0.06, matDark, sx * 1.00, 2.58, 0.50);
-    for (let i = 0; i < 5; i++) {
-      mk(0.24, 0.025, 0.03, matTrim, sx * 1.00, 2.47 + i * 0.055, 0.535);
-    }
-  });
-
-  /* ---- denomination plate ---- */
-  mk(0.62, 0.11, 0.04, matBrass, 0, 2.40, 0.55);
-  mk(0.54, 0.07, 0.02, lam({ color: 0x15100c }), 0, 2.40, 0.575);
-
-  /* ---- chrome trim down the front corners ---- */
-  [-1, 1].forEach(sx => {
-    mk(0.06, 1.90, 0.06, matTrim, sx * 1.12, 1.55, 0.52);
-    mk(0.10, 0.06, 0.10, matBrass, sx * 1.12, 0.60, 0.52);
-  });
-
-  /* ---- tower light on the crown ---- */
-  mk(0.16, 0.26, 0.16, matDark, 0.80, 3.16, 0);
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.22, 8),
-    new THREE.MeshLambertMaterial({ color: 0xff5a2a, emissive: 0xff5a2a, emissiveIntensity: 0.55 }));
-  psx(tower.material);
-  tower.position.set(0.80, 3.38, 0);
-  g.add(tower);
-  m.tower = tower;
-  mk(0.13, 0.04, 0.13, matBrass, 0.80, 3.50, 0);
-
-  /* ---- footrest ---- */
-  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.0, 8), matBrass);
-  rail.rotation.z = Math.PI / 2;
-  rail.position.set(0, 0.14, 0.86);
-  g.add(rail);
-  [-1, 1].forEach(sx => mk(0.08, 0.18, 0.08, matDark, sx * 0.92, 0.09, 0.86));
-
-  /* ---- crown ---- */
-  mk(2.5, 0.14, 1.15, matBrass, 0, 2.96, 0);
-  mk(2.2, 0.06, 1.02, matTrim,  0, 3.05, 0);
-  const gar = new THREE.Mesh(new THREE.IcosahedronGeometry(0.19, 0), matCab);
-  gar.position.set(0, 3.18, 0); gar.scale.set(1.5, 0.9, 1.0);
-  g.add(gar);
-  const horn = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 5), matBrass);
-  horn.position.set(0.16, 3.30, 0); horn.rotation.z = -0.4; g.add(horn);
-  const horn2 = horn.clone(); horn2.position.x = -0.16; horn2.rotation.z = 0.4; g.add(horn2);
-
-  /* ---- lever: mount plate, segmented shaft, collar, ball ---- */
-  const plate = mk(0.34, 0.46, 0.12, matDark, 1.5, 1.18, 0.16);
-  plate.rotation.z = 0.06;
+  /* ---- lever: PROCEDURAL and animatable. slotlever.glb is one fused mesh
+     (plate + arm + ball), so a pull would swing the mount plate too — this stays
+     reliable. The plate is static; the pivot group tips forward on a pull. ---- */
+  const lp = m.leverWorld.clone().sub(m.at);          /* group-local lever base */
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.24, 0.05), matDark);
+  plate.position.set(lp.x, lp.y + 0.06, lp.z - 0.055); g.add(plate);
   for (let i = 0; i < 4; i++) {
-    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.05, 6), matBrass);
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.03, 6), brass);
     bolt.rotation.x = Math.PI / 2;
-    bolt.position.set(1.5 + (i % 2 ? 0.11 : -0.11), 1.18 + (i < 2 ? 0.16 : -0.16), 0.23);
+    bolt.position.set(lp.x + (i % 2 ? 0.045 : -0.045),
+                      lp.y + 0.06 + (i < 2 ? 0.08 : -0.08), lp.z - 0.03);
     g.add(bolt);
   }
   const lev = new THREE.Group();
-  const shaftMat = lam({ map: TEX.metal, color: 0xe8d850 });
-  lev.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.058, 0.16, 8), shaftMat));
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.90, 8), shaftMat);
-  shaft.position.y = 0.55; lev.add(shaft);
-  /* collars up the shaft — reads as a real handle, not a stick */
-  [0.30, 0.62].forEach(y => {
-    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.05, 8), matBrass);
+  const shaftMat = lam({ map: TEX.metal, color: 0xd8c84e });
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 0.34, 8), shaftMat);
+  shaft.position.y = 0.17; lev.add(shaft);
+  [0.10, 0.24].forEach(y => {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.025, 8), brass);
     c.position.y = y; lev.add(c);
   });
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8),
-    new THREE.MeshLambertMaterial({ color: 0xc01818, emissive: 0x9c1010, emissiveIntensity: 0.7 }));
-  ball.position.y = 1.06; lev.add(ball);
-  const ballRim = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8),
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0xc01818, emissive: 0x8c1010, emissiveIntensity: 0.65 }));
+  ball.position.y = 0.375; psx(ball.material); lev.add(ball);
+  const ballRim = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8),
     new THREE.MeshBasicMaterial({ color: 0xffe23a, side: THREE.BackSide }));
-  ballRim.position.y = 1.06; lev.add(ballRim);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.05, 8), matBrass);
-  cap.position.y = 0.92; lev.add(cap);
-
-  lev.position.set(1.5, 1.18, 0.2);
+  ballRim.position.y = 0.375; lev.add(ballRim);
+  lev.position.set(lp.x, lp.y, lp.z);
   g.add(lev);
   m.lever = lev;
 
-  g.position.copy(m.at);
-  g.scale.setScalar(MACHINE_SCALE);
-  scene.add(g);
-  m.group = g;
-
-  /* ---- the table it stands on ---- */
-  const matTable = lam({ map: TEX.wood, color: 0x8a7460 });
-  box(TABLE.w, 0.07, TABLE.d, matTable, m.x, TABLE.h - 0.035, m.tableZ);
-  box(TABLE.w - 0.10, 0.05, TABLE.d - 0.10, lam({ map: TEX.metal, color: 0x5a4c40 }),
-      m.x, TABLE.h - 0.10, m.tableZ);
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
-    box(0.09, TABLE.h - 0.10, 0.09, matTable,
-        m.x + sx * (TABLE.w / 2 - 0.10), (TABLE.h - 0.10) / 2,
-        m.tableZ + sz * (TABLE.d / 2 - 0.10));
-  });
-  blocker(m.x, m.tableZ, TABLE.w + 0.08, TABLE.d + 0.08);
-
-  /* ---- charm rack ---- */
+  /* ---- charm rack: token math is unchanged (spawnCharmToken keys off rackX,
+     tableZ and TABLE.h), so this stays a tray at the same local offsets — just
+     freestanding beside the machine now, in front of the charm cabinet. ---- */
   box(0.72, 0.04, 0.58, lam({ map: TEX.metal, color: 0x6e5c48 }),
       m.rackX, TABLE.h + 0.02, m.tableZ);
   [[-0.36, 0], [0.36, 0], [0, -0.29], [0, 0.29]].forEach(([ox, oz], i) => {
@@ -60945,13 +60867,21 @@ function buildMachine(idx) {
         lam({ map: TEX.metal, color: 0x7e6a52 }),
         m.rackX + ox, TABLE.h + 0.06, m.tableZ + oz);
   });
-  m.rackLight = new THREE.PointLight(0xffc060, 2.6, 1.7, 2);
+  m.rackLight = new THREE.PointLight(0xffc060, 2.4, 1.7, 2);
   m.rackLight.position.set(m.rackX, TABLE.h + 0.52, m.tableZ + 0.15);
   scene.add(m.rackLight);
 
+  /* ---- the stool you sit on + the winch drum the ankle-chain feeds off ---- */
+  buildStool(m.x, m.tableZ + 1.02);
+  m.drum = buildChainDrum(m.x, m.tableZ + 0.46);
+
+  /* ---- screen glow ---- */
   m.light = new THREE.PointLight(0xffa028, 16, 6.5, 2);
   m.light.position.set(m.screenAt.x, m.screenAt.y, m.screenAt.z + 0.30);
   scene.add(m.light);
+
+  /* cabinet-body footprint so you can't walk through it */
+  blocker(m.x, m.tableZ + 0.02, 0.70, 0.60);
 
   MACHINES.push(m);
   return m;
@@ -61765,9 +61695,9 @@ function nearMachine() {
   /* you have to walk up to it — no reaching across the room */
   const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
   for (const m of MACHINES) {
-    if (player.pos.distanceTo(m.screenAt) > 1.45) continue;
+    if (player.pos.distanceTo(m.screenAt) > 1.75) continue;
     const to = _toMachine.copy(m.screenAt).sub(player.pos).normalize();
-    if (to.dot(fwd) > 0.62) return m;
+    if (to.dot(fwd) > 0.55) return m;
   }
   return null;
 }
@@ -63257,7 +63187,7 @@ function updateChains() {
   const m = myMachine;
   if (!m) { chains.group.visible = false; return; }
   chains.group.visible = true;
-  _cA.set(m.x, 0.32, m.tableZ + 0.60);                 /* base of your machine */
+  _cA.set(m.x, 0.42, m.tableZ + 0.50);                 /* off the top of the winch drum */
   _cB.set(player.pos.x, 0.14, player.pos.z);           /* your ankle */
   const dist = _cA.distanceTo(_cB);
   const sag = Math.max(0.04, (CHAIN_LEN - dist) * 0.22);
@@ -64902,22 +64832,40 @@ function wireModels() {
   /* THE COLLECTOR — no placeholder existed; stand it in the NE corner, lurking,
      turned to face into the room toward the player */
   if (MODELS.collector) {
-    const h = placeModel('collector', { pos: new THREE.Vector3(2.75, 0, -2.35), height: 1.95, rotationY: 2.4 });
+    const h = placeModel('collector', { pos: new THREE.Vector3(3.25, 0, -1.7), height: 1.95, rotationY: 2.4 });
     if (h) {
       h.children[0].rotation.x = 0.16;   /* hunch forward — a lurch, not a stiff T */
       LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
     }
   }
-  /* FURNITURE — the gothic cabinet stands beside the machines. Its drawer (the
-     chest model) is a key-locked charm store that also unlocks more charm slots
-     — that mechanic isn't built yet, so the chest is NOT placed on its own here;
-     it'll be wired as the cabinet's drawer. */
-  if (MODELS.hutch) {
-    placeModel('hutch', { pos: new THREE.Vector3(0, 0, -2.52), height: 1.6, rotationY: 0 });
-    blocker(0, -2.52, 0.7, 0.55);
+  /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
+     cabinet, and dress the station with its charm cabinet + locked chest. */
+  for (const m of MACHINES) dressMachine(m);
+  /* prisoner is wired as the co-op avatar (makeAvatar). peeker (window gap)
+     is still pending. */
+}
+
+/* Swap a machine's fallback box for the delivered cabinet and stand its charm
+   cabinet (open-shelf hutch) + locked chest on the station's outer side. All
+   guarded — a missing model just leaves the fallback box + rack, game still
+   runs the same. */
+function dressMachine(m) {
+  if (MODELS.slotmachine) {
+    const inst = MODELS.slotmachine.scene.clone(true);
+    fitInstance(inst, H_MACH);           /* feet to y=0, centred X/Z, group-local */
+    m.group.add(inst);
+    m.model = inst;
+    if (m.fallback) m.fallback.visible = false;
   }
-  /* prisoner is wired as the co-op avatar (makeAvatar). peeker / slotmachine /
-     slotlever loaded, integration pending. */
+  const cz = m.tableZ;
+  if (MODELS.hutch) {                     /* open-shelf charm cabinet, against the wall */
+    placeModel('hutch', { pos: new THREE.Vector3(m.cabinetX, 0, cz), height: 1.66, rotationY: 0 });
+    blocker(m.cabinetX, cz, 0.72, 0.5);
+  }
+  if (MODELS.chest) {                     /* the key-locked charm chest, in front of it */
+    placeModel('chest', { pos: new THREE.Vector3(m.cabinetX, 0, cz + 0.74), height: 0.6, rotationY: 0 });
+    blocker(m.cabinetX, cz + 0.74, 0.95, 0.85);
+  }
 }
 
 
@@ -65227,7 +65175,7 @@ function updateMachine(m, dt) {
   /* lever springs back after a pull */
   if (m.leverT > 0) {
     m.leverT = Math.max(0, m.leverT - dt * 2.2);
-    const a = Math.sin(m.leverT * Math.PI) * 0.95;
+    const a = Math.sin(m.leverT * Math.PI) * 0.55;
     m.lever.rotation.x = a;
   }
 
