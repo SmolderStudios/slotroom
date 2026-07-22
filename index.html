@@ -60379,11 +60379,16 @@ const compPass = makePass(`
     /* scanlines + dither on the LOW-RES grid, not the screen grid */
     vec2 px = uv * uRes;
     c *= 1.0 - 0.042 * step(0.5, fract(px.y * 0.5));
-    c += (bayer(px) - 0.5) * 0.019;
+    /* Fade the grain out where it's dark so the distance stays readable, while
+       close, lit surfaces keep the full PSX crunch. The old constant grain sat
+       on near-black pixels and turned the far side of the room to mush. */
+    float lum   = dot(c, vec3(0.299, 0.587, 0.114));
+    float grain = smoothstep(0.03, 0.42, lum);
+    c += (bayer(px) - 0.5) * 0.019 * grain;
 
     /* faint rolling interference */
     float n = fract(sin(dot(px, vec2(12.9898, 78.233)) + uTime * 3.0) * 43758.5453);
-    c += (n - 0.5) * 0.014;
+    c += (n - 0.5) * 0.012 * grain;
 
     gl_FragColor = vec4(c, 1.0);
   }`,
@@ -64890,6 +64895,7 @@ function wireModels() {
     const inst = MODELS.watcher.scene.clone(true);
     fitInstance(inst, 2.1);
     /* model's front is -Z, which is exactly what lookAt aims at the target */
+    inst.rotation.x = 0.12;      /* hunch forward so the T-pose reads as a loom */
     wg.add(inst);
     LIVING.push({ node: inst, y0: inst.position.y, ph: 0.0, amt: 0.6 });
   }
@@ -64897,16 +64903,18 @@ function wireModels() {
      turned to face into the room toward the player */
   if (MODELS.collector) {
     const h = placeModel('collector', { pos: new THREE.Vector3(2.75, 0, -2.35), height: 1.95, rotationY: 2.4 });
-    if (h) LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
+    if (h) {
+      h.children[0].rotation.x = 0.16;   /* hunch forward — a lurch, not a stiff T */
+      LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
+    }
   }
-  /* FURNITURE — a gothic hutch against the west wall + a storage chest */
+  /* FURNITURE — the gothic cabinet stands beside the machines. Its drawer (the
+     chest model) is a key-locked charm store that also unlocks more charm slots
+     — that mechanic isn't built yet, so the chest is NOT placed on its own here;
+     it'll be wired as the cabinet's drawer. */
   if (MODELS.hutch) {
-    placeModel('hutch', { pos: new THREE.Vector3(-3.28, 0, -1.7), height: 1.85, rotationY: Math.PI / 2 });
-    blocker(-3.28, -1.7, 0.7, 0.9);
-  }
-  if (MODELS.chest) {
-    placeModel('chest', { pos: new THREE.Vector3(1.15, 0, 2.7), height: 0.6, rotationY: -0.3 });
-    blocker(1.15, 2.7, 0.7, 0.6);
+    placeModel('hutch', { pos: new THREE.Vector3(0, 0, -2.52), height: 1.6, rotationY: 0 });
+    blocker(0, -2.52, 0.7, 0.55);
   }
   /* prisoner is wired as the co-op avatar (makeAvatar). peeker / slotmachine /
      slotlever loaded, integration pending. */
