@@ -63886,10 +63886,22 @@ const net = {
     /* smooth toward the last received pose so 15Hz doesn't look like 15fps */
     const k = Math.min(1, dt * 9);
     for (const p of this.peers.values()) {
+      _peerPrev.copy(p.group.position);
       p.group.position.lerp(p.tgt, k);
       p.group.position.y = 0;
       p.yaw = angLerp(p.yaw, p.tyaw, k);
       p.group.rotation.y = p.yaw + Math.PI;
+      /* no rig on the model, so fake the gait: bob + weight-roll while moving,
+         a slow breathe while standing — enough to read as "they're alive". */
+      const spd = _peerPrev.distanceTo(p.group.position) / Math.max(dt, 0.001);
+      const walk = spd > 0.3 ? 1 : 0;
+      p.walkT = (p.walkT || 0) + dt * (walk ? 10 : 2.2);
+      const body = p.group.userData && p.group.userData.body;
+      if (body) {
+        body.position.y = walk ? Math.abs(Math.sin(p.walkT)) * 0.05 : Math.sin(elapsed * 1.4) * 0.006;
+        body.rotation.z = Math.sin(p.walkT) * 0.06 * walk + Math.sin(elapsed * 1.1) * 0.012;
+        body.rotation.x = walk * 0.07;
+      }
     }
   },
 };
@@ -63899,7 +63911,7 @@ const net = {
 /* The other player, dressed like whoever was here before you: sackcloth, an
    iron collar with a broken chain, and a shackle they never got out of. Still
    carries a lamp — that stays the thing you spot first across a dark room. */
-function makeAvatar() {
+function makeProceduralAvatar() {
   const g = new THREE.Group();
   const rag   = lam({ color: 0x8e8574 });
   const dark  = lam({ color: 0x3a3c44 });
@@ -63964,6 +63976,41 @@ function makeAvatar() {
   const light = new THREE.PointLight(0x8fd8ff, 3.4, 3.2, 2);
   light.position.set(0.30, 1.02, 0.16); g.add(light);
   return g;
+}
+
+/* just the cyan lamp — the thing you spot first — for the model avatar path */
+function makeAvatarLamp() {
+  const g = new THREE.Group();
+  const iron = lam({ map: TEX.metal, color: 0x8a8f96 });
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5),
+    new THREE.MeshBasicMaterial({ color: 0xbfefff, fog: false }));
+  lamp.position.set(0.30, 1.02, 0.16); g.add(lamp);
+  const bail = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.010, 4, 8), iron);
+  bail.position.set(0.30, 1.08, 0.16); g.add(bail);
+  const light = new THREE.PointLight(0x8fd8ff, 3.4, 3.2, 2);
+  light.position.set(0.30, 1.02, 0.16); g.add(light);
+  return g;
+}
+
+/* The other player: the real prisoner model once it's loaded, else the
+   primitive fallback. Either way it's an OUTER group the network drives, with
+   the body kept in userData so net.tick can fake a walk on it. */
+const _peerPrev = new THREE.Vector3();
+function makeAvatar() {
+  const outer = new THREE.Group();
+  let body;
+  if (typeof MODELS !== 'undefined' && MODELS.prisoner) {
+    const inst = MODELS.prisoner.scene.clone(true);
+    fitInstance(inst, 1.72);
+    /* prisoner model's front is +Z, same as the procedural avatar, so no flip */
+    body = inst;
+    outer.add(makeAvatarLamp());
+  } else {
+    body = makeProceduralAvatar();        /* already carries its own lamp */
+  }
+  outer.add(body);
+  outer.userData.body = body;
+  return outer;
 }
 
 /* =========================================================================
@@ -64769,6 +64816,12 @@ function spawnModel(name, { position, rotation, rotationY, clip, scale } = {}) {
 const MODEL_MIXERS = [];
 function updateModels(dt) {
   for (const m of MODEL_MIXERS) m.update(dt);
+  /* idle breathe / weight-shift on the placed character models */
+  for (const L of LIVING) {
+    const n = L.node; if (!n) continue;
+    n.rotation.z = Math.sin(elapsed * 0.9 + L.ph) * 0.02 * L.amt;
+    n.position.y = L.y0 + Math.sin(elapsed * 1.3 + L.ph) * 0.008 * L.amt;
+  }
 }
 
 /* ---------------------------------------------------------------- [S-17b]
@@ -64782,6 +64835,8 @@ const DELIVERED = {
   peeker:      'models/peeker.glb',
   slotmachine: 'models/slotmachine.glb',
   slotlever:   'models/slotlever.glb',
+  chest:       'models/cabinet_drawer.glb',    /* wooden storage chest */
+  hutch:       'models/cabinet_nodrawer.glb',  /* gothic dresser/hutch */
 };
 let modelsReady = false;
 function loadDeliveredModels() {
@@ -64823,6 +64878,9 @@ function placeModel(name, { pos, height, rotationY = 0 }) {
   return holder;
 }
 
+/* character models that get a subtle idle sway so they don't read as stiff
+   mannequins (they're single static meshes — no rig to move limbs) */
+const LIVING = [];
 function wireModels() {
   /* THE WATCHER — keep the wg anchor (showWatcher drives its position + lookAt),
      just swap the primitive body for the real model. */
@@ -64833,13 +64891,25 @@ function wireModels() {
     fitInstance(inst, 2.1);
     /* model's front is -Z, which is exactly what lookAt aims at the target */
     wg.add(inst);
+    LIVING.push({ node: inst, y0: inst.position.y, ph: 0.0, amt: 0.6 });
   }
   /* THE COLLECTOR — no placeholder existed; stand it in the NE corner, lurking,
      turned to face into the room toward the player */
   if (MODELS.collector) {
-    placeModel('collector', { pos: new THREE.Vector3(2.75, 0, -2.35), height: 1.95, rotationY: 2.4 });
+    const h = placeModel('collector', { pos: new THREE.Vector3(2.75, 0, -2.35), height: 1.95, rotationY: 2.4 });
+    if (h) LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
   }
-  /* prisoner / peeker / slotmachine / slotlever: loaded, integration pending */
+  /* FURNITURE — a gothic hutch against the west wall + a storage chest */
+  if (MODELS.hutch) {
+    placeModel('hutch', { pos: new THREE.Vector3(-3.28, 0, -1.7), height: 1.85, rotationY: Math.PI / 2 });
+    blocker(-3.28, -1.7, 0.7, 0.9);
+  }
+  if (MODELS.chest) {
+    placeModel('chest', { pos: new THREE.Vector3(1.15, 0, 2.7), height: 0.6, rotationY: -0.3 });
+    blocker(1.15, 2.7, 0.7, 0.6);
+  }
+  /* prisoner is wired as the co-op avatar (makeAvatar). peeker / slotmachine /
+     slotlever loaded, integration pending. */
 }
 
 
