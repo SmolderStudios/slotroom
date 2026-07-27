@@ -60452,10 +60452,25 @@ function buildRoom() {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, h), matWall);
     m.position.set(px, h / 2, pz); m.rotation.y = ry; scene.add(m);
   };
+  /* variant with its own height + centre, for the pieces around the doorway */
+  const mkWallH = (pw, ph, px, py, pz, ry) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), matWall);
+    m.position.set(px, py, pz); m.rotation.y = ry; scene.add(m);
+  };
   mkWall(w,  0, -d / 2, 0);
-  mkWall(w,  0,  d / 2, Math.PI);
   mkWall(d, -w / 2, 0,  Math.PI / 2);
   mkWall(d,  w / 2, 0, -Math.PI / 2);
+
+  /* SOUTH wall is built in three pieces instead of one slab, leaving a real
+     doorway-shaped hole around DOOR_AT. The door itself still fills it, but
+     now there is somewhere to see when it opens — the corridor beyond. A solid
+     wall here is why the thing outside could only ever be eyes on a plane. */
+  const DW = 1.30, DH = 2.12, dx = -0.75;      /* opening: width, height, centre */
+  const lw = (dx - DW / 2) - (-w / 2);          /* wall left of the opening */
+  const rw = (w / 2) - (dx + DW / 2);           /* wall right of the opening */
+  mkWallH(lw, h, -w / 2 + lw / 2, h / 2, d / 2, Math.PI);
+  mkWallH(rw, h,  w / 2 - rw / 2, h / 2, d / 2, Math.PI);
+  mkWallH(DW, h - DH, dx, DH + (h - DH) / 2, d / 2, Math.PI);   /* header */
 
   /* skirting so wall/floor seams read as built, not as a gap */
   const skirt = lam({ map: TEX.metal, color: 0x6a5a52 });
@@ -60857,8 +60872,8 @@ function buildMachine(idx) {
   /* Column dividers: thin dark ribs following the drum curve, so the five
      columns read as five separate wheels rather than one scrolling picture. */
   for (let c = 1; c < 5; c++) {
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.30, 0.016), matDark);
-    rib.position.set(-0.215 + c * 0.086, SCREEN_Y, SCREEN_Z + 0.038);
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.232, 0.014), matDark);
+    rib.position.set(-0.215 + c * 0.086, SCREEN_Y, SCREEN_Z + 0.036);
     g.add(rib);
   }
 
@@ -62716,8 +62731,21 @@ function buildHorror() {
   const matDoor  = lam({ map: TEX.door, color: 0xa89684 });
   const matFrame = lam({ map: TEX.metal, color: 0x8a7a68 });
 
-  const slab = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.05, 0.09), matDoor);
-  slab.position.y = 1.02; dg.add(slab);
+  /* The slab is built in four pieces around the barred window rather than as
+     one box, so the window is a genuine hole you see the corridor through. It
+     used to be a solid slab with a pure-black plane stuck on it faking a view
+     of nothing — which is why whatever was outside could only ever be eyes. */
+  const SLB = { w: 0.95, y0: -0.005, y1: 2.045, dp: 0.09 };
+  const WIN = { hw: 0.19, y0: 1.43, y1: 1.69 };
+  const slabPiece = (bw, bh, bx, by) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, SLB.dp), matDoor);
+    m.position.set(bx, by, 0); dg.add(m);
+  };
+  slabPiece(SLB.w, WIN.y0 - SLB.y0, 0, (SLB.y0 + WIN.y0) / 2);          /* below */
+  slabPiece(SLB.w, SLB.y1 - WIN.y1, 0, (WIN.y1 + SLB.y1) / 2);          /* above */
+  const side = SLB.w / 2 - WIN.hw;
+  slabPiece(side, WIN.y1 - WIN.y0, -(WIN.hw + side / 2), (WIN.y0 + WIN.y1) / 2);
+  slabPiece(side, WIN.y1 - WIN.y0,  (WIN.hw + side / 2), (WIN.y0 + WIN.y1) / 2);
 
   /* frame */
   const fr = (bw, bh, bx, by) => {
@@ -62730,14 +62758,10 @@ function buildHorror() {
      LOCAL +Z. Hardware at negative local Z ends up buried in the wall. */
   const FACE = 0.055;   /* slab is 0.09 deep, so its front is at +0.045 */
 
-  /* Barred window — you see darkness through it, nothing else. Must be a
-     true black: the composite converts linear->sRGB, which lifts any dark
-     value hard, and 0x05070a came out as a glowing blue panel. */
-  const win = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.38, 0.26),
-    new THREE.MeshBasicMaterial({ color: 0x000000, fog: false })
-  );
-  win.position.set(0, 1.56, FACE); dg.add(win);
+  /* Barred window — now an actual opening onto the corridor, so the black
+     fake-darkness pane that used to sit here is gone. (It had to be a TRUE
+     black: the composite converts linear->sRGB and lifts any dark value hard,
+     so 0x05070a read as a glowing blue panel. Moot now that it's a real hole.) */
   for (let i = 0; i < 3; i++) {
     const bar = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.28, 0.03), matFrame);
     bar.position.set(-0.12 + i * 0.12, 1.56, FACE + 0.015); dg.add(bar);
@@ -62782,6 +62806,48 @@ function buildHorror() {
   scene.add(dg);
   horror.door = dg;
   blocker(DOOR_AT.x, d / 2 - 0.02, 1.2, 0.2);
+
+  /* ---- THE CORRIDOR. The door used to open onto nothing, so whatever was out
+     there could only ever be a pair of eyes painted on a plane. Now there is
+     real space back there: a long hall lit by two failing lamps, which the
+     figure walks the full length of. You watch it come. Because the lamps are
+     spaced rather than even, it crosses light and dark on the way in instead
+     of just fading up out of black. ---- */
+  /* 5.5m, not 9. The scene's exp2 fog at density 0.105 fades to near-black by
+     about 4-5 metres, so a longer hall just buries the walker in fog for most
+     of its approach — it would step out of nothing a second before arriving.
+     At this length the whole walk stays legible through the window. */
+  const HW = 1.9, HH = 2.5, HLEN = 5.5, hz0 = d / 2;
+  const hFloor = lam({ map: TEX.floor, color: 0x4a4038 });
+  const hWall  = lam({ map: TEX.wall,  color: 0x605245 });
+  const hCeil  = lam({ map: TEX.ceil,  color: 0x2c2620 });
+  box(HW,  0.10, HLEN, hFloor, DOOR_AT.x,        -0.05,   hz0 + HLEN / 2);
+  box(HW,  0.10, HLEN, hCeil,  DOOR_AT.x,         HH,     hz0 + HLEN / 2);
+  box(0.10, HH,  HLEN, hWall,  DOOR_AT.x - HW/2,  HH / 2, hz0 + HLEN / 2);
+  box(0.10, HH,  HLEN, hWall,  DOOR_AT.x + HW/2,  HH / 2, hz0 + HLEN / 2);
+  box(HW,   HH,  0.10, hWall,  DOOR_AT.x,         HH / 2, hz0 + HLEN);
+  /* Three lamps, the first close to the door. The scene runs exp2 fog at
+     density 0.105 toward near-black, so anything more than a couple of metres
+     past the doorway fogs out entirely — a dim corridor simply reads as a
+     black rectangle through the window. These are deliberately hot and
+     short-range so the hall is legible through a 0.38m opening while still
+     falling to darkness between the pools. */
+  horror.hallLights = [1.1, 3.4].map(dz => {
+    const L = new THREE.PointLight(0xffb060, 26.0, 9.0, 2);
+    L.position.set(DOOR_AT.x, HH - 0.30, hz0 + dz);
+    scene.add(L);
+    return L;
+  });
+
+  /* the anchor the walking figure rides; the model is hung on it in wireModels */
+  const hf = new THREE.Group();
+  hf.position.set(DOOR_AT.x, 0, hz0 + HLEN - 1.2);
+  hf.visible = false;
+  scene.add(hf);
+  horror.hallFigure = hf;
+  horror.hallWalk   = 0;                 /* 0 = idle, else 0..1 progress inward */
+  horror.hallZFar   = hz0 + HLEN - 1.2;
+  horror.hallZNear  = hz0 + 0.55;        /* stops just short of the door */
 
   /* ---- boarded window, same wall as the door ---- */
   const winG = new THREE.Group();
@@ -63431,6 +63497,7 @@ function showWatcher() {
 
 function updateHorror(dt) {
   updateBreakIn(dt);
+  updateHallWalk(dt);
 
   /* the collection clock — run it out and it stops asking */
   if (game.offering && !game.paid && game.collectT > 0 && !game.runOver) {
@@ -64924,8 +64991,68 @@ function wireModels() {
   /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
      cabinet, and dress the station with its charm cabinet + locked chest. */
   for (const m of MACHINES) dressMachine(m);
-  /* prisoner is wired as the co-op avatar (makeAvatar). peeker (window gap)
-     is still pending. */
+  /* THE HALL WALKER — peeker.glb was loaded but never used. It gets the
+     corridor: hung on the anchor that updateHallWalk drives down the hall
+     toward the door. Faces -Z (into the room) like the other characters. */
+  if (MODELS.peeker && horror.hallFigure) {
+    const inst = MODELS.peeker.scene.clone(true);
+    fitInstance(inst, 1.98);
+    inst.rotation.x = 0.10;
+    horror.hallFigure.add(inst);
+    horror.hallBody = inst;
+    horror.hallBodyY = inst.position.y;
+  }
+  /* prisoner is wired as the co-op avatar (makeAvatar). */
+}
+
+/* Walks the figure the length of the corridor toward the door, then holds at
+   the glass before retreating. Driven as 0..1 so the gait, the lean and the
+   eyes all key off one value. Only ever seen through the door. */
+function updateHallWalk(dt) {
+  const hf = horror.hallFigure;
+  if (!hf) return;
+
+  if (horror.hallWalk > 0) {
+    /* 0 -> 1 approach, 1 -> 1.45 hold at the door, then gone */
+    horror.hallWalk = Math.min(1.45, horror.hallWalk + dt * 0.085);
+    const k = Math.min(1, horror.hallWalk);
+    hf.visible = true;
+    hf.position.z = horror.hallZFar + (horror.hallZNear - horror.hallZFar) * k;
+    /* gait: it has no rig, so the walk is a trudge — a vertical bob with a
+       roll into each step, which reads as weight rather than a glide */
+    if (horror.hallBody) {
+      const s = elapsed * 3.4;
+      horror.hallBody.position.y = horror.hallBodyY + Math.abs(Math.sin(s)) * 0.055;
+      horror.hallBody.rotation.z = Math.sin(s) * 0.045;
+      horror.hallBody.rotation.x = 0.10 + Math.sin(s * 2) * 0.02;
+    }
+    if (horror.hallWalk >= 1.45) { horror.hallWalk = 0; hf.visible = false; }
+  } else {
+    if (hf.visible) hf.visible = false;
+    /* ambient: every so often, something walks the corridor whether or not you
+       happen to be looking at the door. Catching it by chance is the point. */
+    horror.hallNext = (horror.hallNext == null ? 20 : horror.hallNext) - dt;
+    if (horror.hallNext <= 0) {
+      horror.hallNext = 30 + Math.random() * 45;
+      sendHallWalker();
+    }
+  }
+
+  /* the corridor lamps are failing, so the hall never sits still */
+  if (horror.hallLights) {
+    for (let i = 0; i < horror.hallLights.length; i++) {
+      const f = 0.75 + Math.sin(elapsed * (5.1 + i * 2.7)) * 0.16
+                     + Math.sin(elapsed * (17.3 + i * 4.1)) * 0.09;
+      horror.hallLights[i].intensity = horror.power === false ? 0 : 26.0 * f;
+    }
+  }
+}
+
+/* send it down the hall */
+function sendHallWalker() {
+  if (!horror.hallFigure || horror.hallWalk > 0) return;
+  horror.hallWalk = 0.001;
+  horror.hallFigure.position.z = horror.hallZFar;
 }
 
 /* Swap a machine's fallback box for the delivered cabinet and stand its charm
@@ -65469,7 +65596,7 @@ function boot() {
   window.__d = { camera, player, MACHINES, myMachine, scene, game, horror, focus, ui, AUDIO, THREE,
                  assignMachines, nearRack, placeCarried, ownsMachine, buffRoom, playerCount,
                  step, spin, nearMachine, nearDoor, nearFuse, tryDoor, tryFuse,
-                 enterFocus, exitFocus, showWatcher, triggerBlackout,
+                 enterFocus, exitFocus, showWatcher, sendHallWalker, triggerBlackout,
                  cutPower, setPower, doorBang, windowKnock, escalate, jumpScare,
                  settleRound, resetRun, roundQuota, roundSpins, breakIn,
                  beginOffer, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
