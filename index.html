@@ -60732,27 +60732,46 @@ function buildLamp() {
    The cabinet is modelled at full arcade size and scaled down onto a table,
    so every internal dimension stays in one unit and only MACHINE_SCALE
    changes the footprint. */
-/* The machine is now the delivered slotmachine.glb — a large, floor-standing
-   gothic cabinet you SIT at (no more tabletop). Everything is measured in real
-   metres against the model, which Tripo normalises to 1.0 unit tall before
+/* The machine is the delivered slotmachine.glb — now a BAR-TOP cabinet that
+   stands on a table rather than the old floor-standing tower. Everything is
+   measured against the model, which Tripo normalises to 1.0 unit tall before
    fitInstance scales it to H_MACH.
 
-   These were re-derived by probing the mesh directly in Blender rather than by
-   eye. The old single FACE_Z was calibrated to the model's BOUNDING BOX front —
-   which is the plinth, the frontmost thing on the cabinet — so both canvases
-   were pushed out to plinth depth and hung in mid-air: the reel screen 18.4cm
-   proud of its glass, the readout 21.8cm proud of the marquee. The reel window
-   and the marquee are recessed to DIFFERENT depths (3.5cm apart), so one shared
-   constant cannot place both; they get one each. FACE_Z is kept as-is because
-   the lever mount and the seated camera focus are calibrated against it. */
+   Re-probed off the new mesh (tools/probe.js renders an ortho front view with
+   world-Z packed into the colour channel, then reads the depth profile along a
+   scanline; the two panels show up as dead-flat plateaus between the bezel
+   steps). Do NOT eyeball these against the bounding box — that mistake on the
+   previous model hung the reel canvas 18cm proud of its own glass.
+
+   The new cabinet RAKES: both panels lean back going up, and by different
+   amounts, so each canvas needs its own tilt as well as its own depth. A flat
+   plane at a single Z intersects the bezel at one end and floats at the other.
+   The panels also sit slightly LEFT of centre, because the lever housing on the
+   right widens the bounding box that fitInstance centres on.
+
+   Measured, in model space (height = 1):
+     reel window   x -0.314..0.262  y 0.221..0.536  z 0.099 at centre, ~12.7deg
+     marquee       x -0.274..0.235  y 0.551..0.737  z 0.049 at centre, ~4deg  */
 const TABLE = { h: 0.76 };                   /* kept: charm-rack token height */
 const MACHINE_XS = [-1.66, 1.66];            /* the two stations */
-const H_MACH    = 2.04;                       /* machine height, metres */
-const SCREEN_Y  = 0.505 * H_MACH;             /* reel-window centre (world Y) */
-const READOUT_Y = 0.675 * H_MACH;             /* marquee readout centre */
-const FACE_Z    = 0.135 * H_MACH;             /* bbox front: lever + camera only */
-const SCREEN_Z  = 0.0578 * H_MACH;            /* measured reel-window glass depth */
-const READOUT_Z = 0.0407 * H_MACH;            /* measured marquee panel depth */
+const TABLE_H   = 0.74;                      /* tabletop the machine stands on */
+const H_MACH    = 0.80;                      /* machine height, metres (bar-top) */
+
+const SCREEN_X  = -0.026 * H_MACH;           /* panels sit left of the bbox centre */
+const SCREEN_Y  = TABLE_H + 0.379 * H_MACH;  /* reel-window centre (world Y) */
+const SCREEN_Z  =  0.099 * H_MACH;           /* reel glass depth */
+const SCREEN_W  =  0.576 * H_MACH;
+const SCREEN_H  =  0.315 * H_MACH;
+const SCREEN_RAKE = -0.222;                  /* rad; bottom of the glass leans out */
+
+const READOUT_X = -0.020 * H_MACH;
+const READOUT_Y = TABLE_H + 0.644 * H_MACH;  /* marquee readout centre */
+const READOUT_Z =  0.049 * H_MACH;
+const READOUT_W =  0.509 * H_MACH;
+const READOUT_H =  0.186 * H_MACH;
+const READOUT_RAKE = -0.070;
+
+const FACE_Z    = 0.32 * H_MACH;             /* bbox front: lever + camera only */
 
 /* A shallow cylindrical arc for the reel face. The 5x3 canvas maps straight on
    (u across the columns, v down the rows) but the SURFACE curves away into the
@@ -60798,17 +60817,21 @@ function machineSpec(idx) {
   const at = new THREE.Vector3(x, 0, z);     /* group origin is on the FLOOR now */
   return {
     idx, x, side, tableZ: z, at,
-    rackX: x + side * 0.58,                   /* charm tray, machine side */
-    cabinetX: x + side * 1.20,               /* hutch + chest, outer side */
-    leverWorld: new THREE.Vector3(x - side * 0.33, SCREEN_Y - 0.36, z + FACE_Z - 0.01),
-    screenAt: new THREE.Vector3(x, SCREEN_Y, z + FACE_Z + 0.02),
+    /* the rack clears the TABLE now, not the old cabinet footprint */
+    rackX: x + side * 1.06,                   /* charm shelf, station's outer side */
+    /* the lever housing is moulded into the model's RIGHT flank, so unlike the
+       rest of the furniture this does not mirror per station */
+    leverWorld: new THREE.Vector3(x + 0.30 * H_MACH, SCREEN_Y - 0.16, z + FACE_Z - 0.06),
+    screenAt: new THREE.Vector3(x + SCREEN_X, SCREEN_Y, z + SCREEN_Z + 0.02),
   };
 }
 
 /* where the camera sits once you SIT DOWN at a given machine — lower eye-line,
    close to the glass, tilted down at the reels */
 function focusPosOf(m) {
-  return new THREE.Vector3(m.screenAt.x, 1.16, m.screenAt.z + 0.82);
+  /* eye a touch above the reel glass and closer in — a bar-top unit is read
+     from further up and nearer than the old floor-standing tower */
+  return new THREE.Vector3(m.screenAt.x, SCREEN_Y + 0.16, m.screenAt.z + 0.66);
 }
 const FOCUS_YAW   = 0;
 const FOCUS_PITCH = -0.17;
@@ -60956,12 +60979,28 @@ function buildMachine(idx) {
   /* ---- fallback cabinet: a plain shaped box so the room still reads as a slot
      machine if slotmachine.glb never loads. Hidden the instant it does. ---- */
   const fb = new THREE.Group();
-  const fbBody = new THREE.Mesh(new THREE.BoxGeometry(0.60, H_MACH, 0.52), matCab);
-  fbBody.position.y = H_MACH / 2; fb.add(fbBody);
-  const fbFace = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.44, 0.06), matDark);
+  const fbBody = new THREE.Mesh(new THREE.BoxGeometry(0.62, H_MACH, 0.52), matCab);
+  fbBody.position.y = TABLE_H + H_MACH / 2; fb.add(fbBody);
+  const fbFace = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.30, 0.06), matDark);
   fbFace.position.set(0, SCREEN_Y, 0.26); fb.add(fbFace);
   g.add(fb);
   m.fallback = fb;
+
+  /* ---- PLACEHOLDER table. The machine is a bar-top unit now, so it needs
+     something to stand on; table.glb isn't delivered yet, so this is a plain
+     plank-and-legs stand-in that dressMachine() will swap out the moment one
+     arrives. Sized so the cabinet has elbow room either side. ---- */
+  const tTop = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.07, 0.78),
+    lam({ map: TEX.wood, color: 0x6b5642 }));
+  tTop.position.y = TABLE_H - 0.035;
+  g.add(tTop);
+  const legMat = lam({ map: TEX.wood, color: 0x4e3d2e });
+  [[-0.58, -0.32], [0.58, -0.32], [-0.58, 0.32], [0.58, 0.32]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.09, TABLE_H - 0.07, 0.09), legMat);
+    leg.position.set(lx, (TABLE_H - 0.07) / 2, lz);
+    g.add(leg);
+  });
+  m.table = tTop;
 
   /* ---- reel screen: the live 5x3 canvas, overlaid on the model's blank window.
      Model-agnostic — same spot over the glb or the fallback box. ---- */
@@ -60973,24 +61012,27 @@ function buildMachine(idx) {
   m.reels.tex.minFilter = THREE.NearestFilter;
   m.reels.tex.generateMipmaps = false;
   m.reels.tex.colorSpace = THREE.SRGBColorSpace;
-  /* 0.196 tall, not 0.285. The recessed window panel measures 0.488 x 0.202 at
-     H_MACH, so the old size overflowed the opening top and bottom and punched
-     back out through the frame — from any off-axis angle you saw the screen
-     jutting out of the cabinet. Arc is 8deg rather than 45: enough curve to
-     catch the light and read as a drum, but a 3mm bulge instead of 28mm, so it
-     physically cannot poke through the bezel again. */
-  const screen = new THREE.Mesh(reelDrumGeo(0.42, 0.196, 8),
+  /* Sized to the measured opening with a 6% inset so the bezel always overlaps
+     the canvas edge — an exact fit shows a seam the moment the vertex-snap
+     shader jitters. Arc stays shallow (8deg, ~3mm bulge): enough curve to catch
+     the light and read as a drum, not enough to punch back out through the
+     frame. The RAKE is what's new — the glass leans, so the plane has to lean
+     with it or it scissors through the bezel at one end. */
+  const SCR_W = SCREEN_W * 0.94, SCR_H = SCREEN_H * 0.94;
+  const screen = new THREE.Mesh(reelDrumGeo(SCR_W, SCR_H, 8),
     new THREE.MeshBasicMaterial({ map: m.reels.tex }));
-  screen.position.set(0, SCREEN_Y, SCREEN_Z);
+  screen.position.set(SCREEN_X, SCREEN_Y, SCREEN_Z + 0.004);
+  screen.rotation.x = SCREEN_RAKE;
   g.add(screen);
   m.reelPlane = screen;
 
   /* Column dividers: thin dark ribs following the drum curve, so the five
-     columns read as five separate wheels rather than one scrolling picture. */
+     columns read as five separate wheels rather than one scrolling picture.
+     Parented to the screen so they inherit its rake for free. */
   for (let c = 1; c < 5; c++) {
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.188, 0.010), matDark);
-    rib.position.set(-0.21 + c * 0.084, SCREEN_Y, SCREEN_Z + 0.012);
-    g.add(rib);
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.004, SCR_H * 0.96, 0.010), matDark);
+    rib.position.set(-SCR_W / 2 + c * (SCR_W / 5), 0, 0.012);
+    screen.add(rib);
   }
 
   /* ---- win readout: overlaid on the marquee ---- */
@@ -61002,25 +61044,37 @@ function buildMachine(idx) {
   m.topTex.minFilter = THREE.NearestFilter;
   m.topTex.generateMipmaps = false;
   m.topTex.colorSpace = THREE.SRGBColorSpace;
-  const topScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.108),
+  const topScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(READOUT_W * 0.94, READOUT_H * 0.94),
     new THREE.MeshBasicMaterial({ map: m.topTex }));
-  topScreen.position.set(0, READOUT_Y, READOUT_Z);
+  topScreen.position.set(READOUT_X, READOUT_Y, READOUT_Z + 0.004);
+  topScreen.rotation.x = READOUT_RAKE;      /* shallower lean than the reel glass */
   g.add(topScreen);
   m.readoutPlane = topScreen;
 
-  /* ---- bezel bulbs. The cabinet has lamp sockets painted down both sides of
-     the reel window; these positions were probed off the actual mesh in Blender
-     (frontmost vertex clusters on the bezel, z 0.455-0.800) so each light sits
-     exactly on its painted socket rather than being eyeballed. Self-lit additive
-     spheres, so they cost nothing in the lighting pass, plus one pulsing point
-     light for real spill onto the cabinet face. ---- */
-  const BULBS = [
-    [+0.233, 1.020, 0.129], [-0.238, 1.018, 0.129],
-    [+0.261, 0.997, 0.133], [+0.227, 0.986, 0.134],
-    [-0.229, 0.983, 0.136], [-0.266, 0.978, 0.136],
-    [+0.235, 0.962, 0.143], [+0.272, 0.957, 0.141],
-    [-0.229, 0.955, 0.143], [-0.272, 0.943, 0.142],
-  ];
+  /* ---- bezel bulbs. The new cabinet paints its lamp sockets in a ring around
+     the MARQUEE rather than down the reel window's flanks, so rather than a
+     hand-probed list of ten fixed points these are generated on the marquee's
+     measured rectangle: down both sides and across the top, sitting just
+     outside the panel on the surrounding frame. Self-lit additive spheres, so
+     they cost nothing in the lighting pass, plus one pulsing point light for
+     real spill onto the cabinet face. ---- */
+  const BULBS = [];
+  {
+    const bw = READOUT_W / 2 + 0.030, bh = READOUT_H / 2 + 0.022;
+    const bz = READOUT_Z + 0.014;
+    for (let i = 0; i < 4; i++) {                       /* down each flank */
+      const t = (i + 0.5) / 4, by = READOUT_Y - bh + t * bh * 2;
+      /* the frame rakes with the panel, so track Z off the same lean */
+      const dz = bz - (by - READOUT_Y) * Math.tan(READOUT_RAKE);
+      BULBS.push([READOUT_X - bw, by, dz], [READOUT_X + bw, by, dz]);
+    }
+    for (let i = 0; i < 3; i++) {                       /* across the top */
+      const t = (i + 1) / 4;
+      BULBS.push([READOUT_X - bw + t * bw * 2, READOUT_Y + bh,
+                  bz - bh * Math.tan(READOUT_RAKE)]);
+    }
+  }
   const bulbGeo = new THREE.SphereGeometry(0.019, 6, 5);
   m.bulbs = [];
   BULBS.forEach(([bx, by, bz], i) => {
@@ -61033,21 +61087,32 @@ function buildMachine(idx) {
     m.bulbs.push(b);
   });
   m.bulbLight = new THREE.PointLight(0xff8a30, 0, 1.6, 2);
-  m.bulbLight.position.set(m.x, SCREEN_Y + 0.02, m.tableZ + SCREEN_Z + 0.10);
+  m.bulbLight.position.set(m.x + READOUT_X, READOUT_Y, m.tableZ + READOUT_Z + 0.10);
   scene.add(m.bulbLight);
 
   /* ---- lever: PROCEDURAL and animatable. slotlever.glb is one fused mesh
      (plate + arm + ball), so a pull would swing the mount plate too — this stays
      reliable. The plate is static; the pivot group tips forward on a pull. ---- */
-  const lp = m.leverWorld.clone().sub(m.at);          /* group-local lever base */
+  /* Every dimension below was drawn against the old 2.04m tower. On a bar-top
+     cabinet at 0.80 the same arm is longer than the machine is wide — the ball
+     alone read as a beach ball sat on the table. Rather than re-tuning nine
+     numbers, the whole rig is built at the original scale inside a group and
+     shrunk by the ratio of the two machine heights, so it stays in proportion
+     if H_MACH ever moves again. */
+  const LEVER_S = H_MACH / 2.04;
+  const lrig = new THREE.Group();
+  lrig.position.copy(m.leverWorld).sub(m.at);
+  lrig.scale.setScalar(LEVER_S);
+  g.add(lrig);
+  const lp = new THREE.Vector3(0, 0, 0);             /* rig-local now */
   const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.24, 0.05), matDark);
-  plate.position.set(lp.x, lp.y + 0.06, lp.z - 0.055); g.add(plate);
+  plate.position.set(lp.x, lp.y + 0.06, lp.z - 0.055); lrig.add(plate);
   for (let i = 0; i < 4; i++) {
     const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.03, 6), brass);
     bolt.rotation.x = Math.PI / 2;
     bolt.position.set(lp.x + (i % 2 ? 0.045 : -0.045),
                       lp.y + 0.06 + (i < 2 ? 0.08 : -0.08), lp.z - 0.03);
-    g.add(bolt);
+    lrig.add(bolt);
   }
   const lev = new THREE.Group();
   const shaftMat = lam({ map: TEX.metal, color: 0xd8c84e });
@@ -61064,7 +61129,7 @@ function buildMachine(idx) {
     new THREE.MeshBasicMaterial({ color: 0xffe23a, side: THREE.BackSide }));
   ballRim.position.y = 0.375; lev.add(ballRim);
   lev.position.set(lp.x, lp.y, lp.z);
-  g.add(lev);
+  lrig.add(lev);
   m.lever = lev;
 
   /* ---- charm rack: token math is unchanged (spawnCharmToken keys off rackX,
@@ -61082,8 +61147,8 @@ function buildMachine(idx) {
   scene.add(m.rackLight);
 
   /* ---- the stool you sit on + the winch drum the ankle-chain feeds off ---- */
-  buildStool(m.x, m.tableZ + 1.02);
-  m.drum = buildChainDrum(m.x, m.tableZ + 0.46);
+  buildStool(m.x, m.tableZ + 0.86);            /* pulled in: it's a table now */
+  m.drum = buildChainDrum(m.x, m.tableZ + 0.58);   /* bolted to the floor UNDER it */
 
   /* ---- screen glow ---- */
   m.light = new THREE.PointLight(0xffa028, 16, 6.5, 2);
@@ -61091,7 +61156,7 @@ function buildMachine(idx) {
   scene.add(m.light);
 
   /* cabinet-body footprint so you can't walk through it */
-  blocker(m.x, m.tableZ + 0.02, 0.70, 0.60);
+  blocker(m.x, m.tableZ + 0.02, 1.34, 0.78);   /* the TABLE's footprint */
 
   MACHINES.push(m);
   return m;
@@ -65749,8 +65814,6 @@ const DELIVERED = {
   peeker:      'models/peeker.glb',
   slotmachine: 'models/slotmachine.glb',
   slotlever:   'models/slotlever.glb',
-  chest:       'models/cabinet_drawer.glb',    /* wooden storage chest */
-  hutch:       'models/cabinet_nodrawer.glb',  /* gothic dresser/hutch */
 };
 let modelsReady = false;
 function loadDeliveredModels() {
@@ -65863,7 +65926,7 @@ function wireModels() {
     }
   }
   /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
-     cabinet, and dress the station with its charm cabinet + locked chest. */
+     cabinet and stand it on the table. */
   for (const m of MACHINES) dressMachine(m);
   /* THE HALL WALKER is gone. peeker.glb is a big disembodied peering head, and
      having it wander the corridor muddied the one thing the hallway is for:
@@ -65997,27 +66060,20 @@ function sendHallWalker() {
   horror.hallFigure.position.z = horror.hallZFar;
 }
 
-/* Swap a machine's fallback box for the delivered cabinet and stand its charm
-   cabinet (open-shelf hutch) + locked chest on the station's outer side. All
-   guarded — a missing model just leaves the fallback box + rack, game still
-   runs the same. */
+/* Swap a machine's fallback box for the delivered cabinet. Guarded — a missing
+   model just leaves the fallback box, and the game runs the same.
+
+   The charm cabinet (hutch) and locked chest that used to flank each station
+   are GONE: the machine shrank to a bar-top unit on a table, and the charm
+   shelf beside it is now the only place charms live. */
 function dressMachine(m) {
-  if (MODELS.slotmachine) {
-    const inst = MODELS.slotmachine.scene.clone(true);
-    fitInstance(inst, H_MACH);           /* feet to y=0, centred X/Z, group-local */
-    m.group.add(inst);
-    m.model = inst;
-    if (m.fallback) m.fallback.visible = false;
-  }
-  const cz = m.tableZ;
-  if (MODELS.hutch) {                     /* open-shelf charm cabinet, against the wall */
-    placeModel('hutch', { pos: new THREE.Vector3(m.cabinetX, 0, cz), height: 1.66, rotationY: 0 });
-    blocker(m.cabinetX, cz, 0.72, 0.5);
-  }
-  if (MODELS.chest) {                     /* the key-locked charm chest, in front of it */
-    placeModel('chest', { pos: new THREE.Vector3(m.cabinetX, 0, cz + 0.74), height: 0.6, rotationY: 0 });
-    blocker(m.cabinetX, cz + 0.74, 0.95, 0.85);
-  }
+  if (!MODELS.slotmachine) return;
+  const inst = MODELS.slotmachine.scene.clone(true);
+  fitInstance(inst, H_MACH);             /* base to y=0, centred X/Z, group-local */
+  inst.position.y += TABLE_H;            /* ...then stand it ON the table */
+  m.group.add(inst);
+  m.model = inst;
+  if (m.fallback) m.fallback.visible = false;
 }
 
 
