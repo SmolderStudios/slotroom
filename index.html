@@ -60643,15 +60643,58 @@ function buildLamp() {
 /* The machine is now the delivered slotmachine.glb — a large, floor-standing
    gothic cabinet you SIT at (no more tabletop). Everything is measured in real
    metres against the model, which Tripo normalises to 1.0 unit tall before
-   fitInstance scales it to H_MACH. Measured on the model face (see sm_grid):
-   the reel window centres at 0.505 of its height, the marquee readout at 0.655,
-   and the front face is half its depth (0.135) out from centre. */
+   fitInstance scales it to H_MACH.
+
+   These were re-derived by probing the mesh directly in Blender rather than by
+   eye. The old single FACE_Z was calibrated to the model's BOUNDING BOX front —
+   which is the plinth, the frontmost thing on the cabinet — so both canvases
+   were pushed out to plinth depth and hung in mid-air: the reel screen 18.4cm
+   proud of its glass, the readout 21.8cm proud of the marquee. The reel window
+   and the marquee are recessed to DIFFERENT depths (3.5cm apart), so one shared
+   constant cannot place both; they get one each. FACE_Z is kept as-is because
+   the lever mount and the seated camera focus are calibrated against it. */
 const TABLE = { h: 0.76 };                   /* kept: charm-rack token height */
 const MACHINE_XS = [-1.66, 1.66];            /* the two stations */
 const H_MACH    = 2.04;                       /* machine height, metres */
-const SCREEN_Y  = 0.512 * H_MACH;             /* reel-window centre (world Y) */
-const READOUT_Y = 0.655 * H_MACH;             /* marquee readout centre */
-const FACE_Z    = 0.135 * H_MACH;             /* front face, from machine centre */
+const SCREEN_Y  = 0.505 * H_MACH;             /* reel-window centre (world Y) */
+const READOUT_Y = 0.675 * H_MACH;             /* marquee readout centre */
+const FACE_Z    = 0.135 * H_MACH;             /* bbox front: lever + camera only */
+const SCREEN_Z  = 0.0578 * H_MACH;            /* measured reel-window glass depth */
+const READOUT_Z = 0.0407 * H_MACH;            /* measured marquee panel depth */
+
+/* A shallow cylindrical arc for the reel face. The 5x3 canvas maps straight on
+   (u across the columns, v down the rows) but the SURFACE curves away into the
+   cabinet, so the reels read as physical drums sitting behind glass instead of
+   a sticker stuck on the front. The arc's edges land at z=0 — flush with the
+   window plane — and the middle bulges toward the player, staying clear of the
+   bezel. Curvature also gives the vertex-snap shader something to bite on. */
+function reelDrumGeo(w, h, deg, seg = 10, cols = 5) {
+  const th = THREE.MathUtils.degToRad(deg);
+  const R  = h / (2 * Math.sin(th / 2));
+  const z0 = R * Math.cos(th / 2);
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i <= seg; i++) {
+    const t = i / seg, a = -th / 2 + t * th;
+    const y = R * Math.sin(a), z = R * Math.cos(a) - z0;
+    for (let j = 0; j <= cols; j++) {
+      const s = j / cols;
+      pos.push(-w / 2 + s * w, y, z);
+      uv.push(s, t);                  /* CanvasTexture flipY: v=0 is image bottom */
+    }
+  }
+  for (let i = 0; i < seg; i++) {
+    for (let j = 0; j < cols; j++) {
+      const a = i * (cols + 1) + j, b = a + 1, c = a + cols + 1, d = c + 1;
+      idx.push(a, b, c, b, d, c);     /* wound to face +z */
+    }
+  }
+  const gm = new THREE.BufferGeometry();
+  gm.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  gm.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  gm.setIndex(idx);
+  gm.computeVertexNormals();
+  return gm;
+}
 
 const MACHINES = [];
 let myMachine = null;                        /* the one this client owns */
@@ -60805,11 +60848,19 @@ function buildMachine(idx) {
   m.reels.tex.minFilter = THREE.NearestFilter;
   m.reels.tex.generateMipmaps = false;
   m.reels.tex.colorSpace = THREE.SRGBColorSpace;
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.43, 0.285),
+  const screen = new THREE.Mesh(reelDrumGeo(0.43, 0.285, 45),
     new THREE.MeshBasicMaterial({ map: m.reels.tex }));
-  screen.position.set(0, SCREEN_Y, FACE_Z + 0.022);
+  screen.position.set(0, SCREEN_Y, SCREEN_Z);
   g.add(screen);
   m.reelPlane = screen;
+
+  /* Column dividers: thin dark ribs following the drum curve, so the five
+     columns read as five separate wheels rather than one scrolling picture. */
+  for (let c = 1; c < 5; c++) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.30, 0.016), matDark);
+    rib.position.set(-0.215 + c * 0.086, SCREEN_Y, SCREEN_Z + 0.038);
+    g.add(rib);
+  }
 
   /* ---- win readout: overlaid on the marquee ---- */
   const tc = document.createElement('canvas');
@@ -60822,9 +60873,37 @@ function buildMachine(idx) {
   m.topTex.colorSpace = THREE.SRGBColorSpace;
   const topScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.108),
     new THREE.MeshBasicMaterial({ map: m.topTex }));
-  topScreen.position.set(0, READOUT_Y, FACE_Z + 0.022);
+  topScreen.position.set(0, READOUT_Y, READOUT_Z);
   g.add(topScreen);
   m.readoutPlane = topScreen;
+
+  /* ---- bezel bulbs. The cabinet has lamp sockets painted down both sides of
+     the reel window; these positions were probed off the actual mesh in Blender
+     (frontmost vertex clusters on the bezel, z 0.455-0.800) so each light sits
+     exactly on its painted socket rather than being eyeballed. Self-lit additive
+     spheres, so they cost nothing in the lighting pass, plus one pulsing point
+     light for real spill onto the cabinet face. ---- */
+  const BULBS = [
+    [+0.233, 1.020, 0.129], [-0.238, 1.018, 0.129],
+    [+0.261, 0.997, 0.133], [+0.227, 0.986, 0.134],
+    [-0.229, 0.983, 0.136], [-0.266, 0.978, 0.136],
+    [+0.235, 0.962, 0.143], [+0.272, 0.957, 0.141],
+    [-0.229, 0.955, 0.143], [-0.272, 0.943, 0.142],
+  ];
+  const bulbGeo = new THREE.SphereGeometry(0.019, 6, 5);
+  m.bulbs = [];
+  BULBS.forEach(([bx, by, bz], i) => {
+    const b = new THREE.Mesh(bulbGeo, new THREE.MeshBasicMaterial({
+      color: 0xff7a2a, transparent: true, opacity: 0.8,
+      blending: THREE.AdditiveBlending, depthWrite: false }));
+    b.position.set(bx, by, bz + 0.012);
+    b.userData.phase = i * 0.97;          /* staggered so idle reads as a chase */
+    g.add(b);
+    m.bulbs.push(b);
+  });
+  m.bulbLight = new THREE.PointLight(0xff8a30, 0, 1.6, 2);
+  m.bulbLight.position.set(m.x, SCREEN_Y + 0.02, m.tableZ + SCREEN_Z + 0.10);
+  scene.add(m.bulbLight);
 
   /* ---- lever: PROCEDURAL and animatable. slotlever.glb is one fused mesh
      (plate + arm + ball), so a pull would swing the mount plate too — this stays
@@ -61535,7 +61614,11 @@ const myShare    = () => Math.ceil(nightTotal() / playerCount());
 const roundSpins = () => BASE_SPINS + buff(myMachine, 'extraSpins');
 
 const game = {
-  coins: 0,
+  /* Starting float. SPIN_COST is 3 and a night is 14 spins, so a run needs 42
+     coins just to be played to the end — starting at 0 meant you could not
+     afford the first pull. 60 covers the full night with a little slack while
+     still leaving night 1's quota of 70 as a real target you have to win. */
+  coins: 60,
   spins: BASE_SPINS,
   clovers: 0,
   lastWin: 0,
@@ -65184,6 +65267,24 @@ function updateMachine(m, dt) {
   const winBoost = m.reels.flash > 0 ? 1 + Math.max(0, Math.sin(m.reels.flash * 12)) * 0.5 : 1;
   m.light.intensity = horror.power ? 20 * flicker * winBoost : 0;
   m.light.color.setHex(m.reels.flash > 0 ? 0xff8ae0 : 0xffa028);
+
+  /* bezel bulbs: a slow warm chase while idle, a hard strobe on a win. The
+     staggered phase makes the strobe run along the bank instead of blinking
+     as one lump. Dead when the power is out, like everything else. */
+  if (m.bulbs) {
+    const won = m.reels.flash > 0;
+    for (const b of m.bulbs) {
+      const ph = b.userData.phase;
+      let v = won
+        ? (Math.sin(elapsed * 26 - ph * 1.6) > -0.25 ? 1.0 : 0.10)
+        : 0.40 + 0.28 * Math.sin(elapsed * 2.0 + ph);
+      if (!horror.power) v *= 0.05;
+      b.material.opacity = v;
+      b.scale.setScalar(0.8 + v * 0.5);
+    }
+    m.bulbLight.intensity = horror.power
+      ? (won ? 2.2 + 2.6 * Math.abs(Math.sin(elapsed * 20)) : 0.55) : 0;
+  }
 
 
 
