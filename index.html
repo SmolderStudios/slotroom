@@ -62977,16 +62977,11 @@ function buildHorror() {
     lip.position.set(x, y, FACE); dg.add(lip);
   });
 
-  const eyes = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.34, 0.12),
-    new THREE.MeshBasicMaterial({ map: TEX.eyes, transparent: true, fog: false, opacity: 0 })
-  );
-  /* between the black pane (FACE) and the bars (FACE+0.015), so it reads as
-     something standing behind the glass rather than painted on the door */
-  eyes.position.set(0, 1.56, FACE + 0.007);
-  eyes.visible = false;
-  dg.add(eyes);
-  horror.eyes = eyes;
+  /* The floating pair of eyes behind the window is gone. It was a stand-in from
+     when the door opened onto nothing and there was no figure to show; now the
+     collector itself walks up to the hatch, and a disembodied pair of eyes on
+     top of that was one apparition too many. horror.eyes is simply never set —
+     every site that drives it is already null-guarded. */
 
   dg.position.set(DOOR_AT.x, 0, d / 2 - 0.05);
   dg.rotation.y = Math.PI;
@@ -63004,7 +62999,17 @@ function buildHorror() {
      about 4-5 metres, so a longer hall just buries the walker in fog for most
      of its approach — it would step out of nothing a second before arriving.
      At this length the whole walk stays legible through the window. */
-  const HW = 1.9, HH = 2.5, HLEN = 5.5, hz0 = d / 2;
+  /* SIDEWAYS (2026-07-27). It used to run straight out from the door, so you
+     could sight right down it and watch the collector pop into existence at the
+     far end and trudge the whole length toward you — the approach had no
+     mystery. It is now a CROSS-corridor: shallow in Z, long in X, running left
+     to right past the doorway. Through a 0.38m barred window you see a slice of
+     passage and a wall opposite; the collector simply walks INTO that slice
+     from off to one side, which is all you ever see of where it comes from. */
+  const HH = 2.5, hz0 = d / 2;
+  const HDEPTH = 2.3;      /* how far back the passage goes (Z) */
+  const HSPAN  = 10.0;     /* how far it runs left-right (X) */
+  const HW = HSPAN, HLEN = HDEPTH;   /* kept: other code reads these names */
   /* fog:false on the corridor. The scene's exp2 fog fades toward near-black,
      and it is applied per-material — so the hall, being entirely beyond the
      doorway, got fogged to nothing no matter how hot the lamps were. The door's
@@ -63013,41 +63018,39 @@ function buildHorror() {
   const hFloor = lam({ map: TEX.floor, color: 0x6a5a4a, fog: false });
   const hWall  = lam({ map: TEX.wall,  color: 0x7a6a58, fog: false });
   const hCeil  = lam({ map: TEX.ceil,  color: 0x3c342c, fog: false });
-  box(HW,  0.10, HLEN, hFloor, DOOR_AT.x,        -0.05,   hz0 + HLEN / 2);
-  box(HW,  0.10, HLEN, hCeil,  DOOR_AT.x,         HH,     hz0 + HLEN / 2);
-  box(0.10, HH,  HLEN, hWall,  DOOR_AT.x - HW/2,  HH / 2, hz0 + HLEN / 2);
-  box(0.10, HH,  HLEN, hWall,  DOOR_AT.x + HW/2,  HH / 2, hz0 + HLEN / 2);
-  box(HW,   HH,  0.10, hWall,  DOOR_AT.x,         HH / 2, hz0 + HLEN);
-  /* Three lamps, the first close to the door. The scene runs exp2 fog at
-     density 0.105 toward near-black, so anything more than a couple of metres
-     past the doorway fogs out entirely — a dim corridor simply reads as a
-     black rectangle through the window. These are deliberately hot and
-     short-range so the hall is legible through a 0.38m opening while still
-     falling to darkness between the pools. */
-  horror.hallLights = [1.1, 3.4].map(dz => {
-    const L = new THREE.PointLight(0xffb060, 26.0, 9.0, 2);
-    L.position.set(DOOR_AT.x, HH - 0.30, hz0 + dz);
+  box(HSPAN, 0.10,   HDEPTH, hFloor, DOOR_AT.x,             -0.05,  hz0 + HDEPTH / 2);
+  box(HSPAN, 0.10,   HDEPTH, hCeil,  DOOR_AT.x,              HH,    hz0 + HDEPTH / 2);
+  /* the wall you see straight through the window — this is what kills the
+     sight-line down the hall */
+  box(HSPAN, HH,     0.10,   hWall,  DOOR_AT.x,              HH / 2, hz0 + HDEPTH);
+  /* caps at each end of the run, well outside the window's view cone */
+  box(0.10,  HH,     HDEPTH, hWall,  DOOR_AT.x - HSPAN / 2,  HH / 2, hz0 + HDEPTH / 2);
+  box(0.10,  HH,     HDEPTH, hWall,  DOOR_AT.x + HSPAN / 2,  HH / 2, hz0 + HDEPTH / 2);
+  /* Lamps run ALONG the passage now. The one opposite the door lights the slice
+     you can actually see; the outer pair fall away into dark so the ends of the
+     corridor stay unreadable and it can walk out of nothing. */
+  horror.hallLights = [-3.0, 0, 3.0].map(dx => {
+    const L = new THREE.PointLight(0xffb060, dx === 0 ? 26.0 : 14.0, 9.0, 2);
+    L.position.set(DOOR_AT.x + dx, HH - 0.30, hz0 + HDEPTH * 0.55);
     scene.add(L);
     return L;
   });
 
-  /* ---- the collector's chair, partway down the hall. It waits out there all
-     night where you can see it through the barred window, and only gets up when
-     the night's debt comes due. Set off-centre so it doesn't plug the corridor
-     and kill the view down it. ---- */
-  const seatX = DOOR_AT.x + 0.46, seatZ = hz0 + 3.0;
-  const chairW = lam({ map: TEX.wood,  color: 0x6a5240, fog: false });
-  const chairM = lam({ map: TEX.metal, color: 0x4a4038, fog: false });
-  box(0.46, 0.06, 0.44, chairW, seatX, 0.46, seatZ);                 /* seat */
-  box(0.46, 0.60, 0.06, chairW, seatX, 0.76, seatZ + 0.19);          /* back */
-  [[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]].forEach(([ox, oz]) => {
-    box(0.05, 0.46, 0.05, chairM, seatX + ox, 0.23, seatZ + oz);     /* legs */
-  });
-  horror.collectorSeat = new THREE.Vector3(seatX, 0, seatZ - 0.04);
+  /* The chair is gone with the sit-down behaviour it existed for — the
+     collector no longer waits out here in view, so there is nothing to sit on
+     and an empty chair in the one visible slice just drew the eye.
+
+     Three points define the approach, all at floor level:
+       HOME  — far along the passage, past the light, out of the window's cone
+       LANE  — directly opposite the door, still out in the corridor
+       DOOR  — stepped up to the hatch
+     Walking HOME->LANE crosses the window sideways, which is the whole point of
+     turning the corridor: you catch it passing, then it turns in on you. */
+  const laneZ = hz0 + HDEPTH * 0.58;
   horror.collectorDoor = new THREE.Vector3(DOOR_AT.x, 0, hz0 + 0.62);
-  /* Where it waits when it wants nothing: past the end of the corridor and off
-     to one side, hidden. It only exists out there when it is coming for you. */
-  horror.collectorHome = new THREE.Vector3(seatX + 0.55, 0, hz0 + HLEN + 1.4);
+  horror.collectorLane = new THREE.Vector3(DOOR_AT.x, 0, laneZ);
+  horror.collectorHome = new THREE.Vector3(DOOR_AT.x + HSPAN / 2 - 0.9, 0, laneZ);
+  horror.collectorSeat = horror.collectorHome;   /* legacy name, still read elsewhere */
 
   /* the anchor the walking figure rides; the model is hung on it in wireModels */
   const hf = new THREE.Group();
@@ -65350,16 +65353,14 @@ function updateCollectorWalk(dt) {
 
   const wantDoor = !!(game.offering && !game.paid && !game.runOver);
 
-  /* Where it waits when it has no business with you: off the end of the hall,
-     to one side, so when it does come it walks IN rather than blinking on. */
-  if (!horror.collectorHome) {
-    horror.collectorHome = new THREE.Vector3(
-      horror.collectorSeat.x + 0.55,
-      0,
-      (horror.hallZFar != null ? horror.hallZFar : horror.collectorSeat.z) + 1.4
-    );
-  }
-  _colTgt.copy(wantDoor ? horror.collectorDoor : horror.collectorHome);
+  /* Two-leg path so it crosses the window sideways before turning in. Coming:
+     walk the lane to the door's x, THEN step up to the hatch. Going: back off
+     the hatch into the lane first, then away down the passage. Picking the leg
+     by how far off the lane we still are keeps it a simple state-free walk. */
+  const lane = horror.collectorLane || horror.collectorDoor;
+  const offLane = Math.abs(c.position.x - lane.x) > 0.12;
+  if (wantDoor) _colTgt.copy(offLane ? lane : horror.collectorDoor);
+  else          _colTgt.copy(Math.abs(c.position.z - lane.z) > 0.12 ? lane : horror.collectorHome);
 
   const dx = _colTgt.x - c.position.x, dz = _colTgt.z - c.position.z;
   const dist = Math.hypot(dx, dz);
@@ -65377,15 +65378,18 @@ function updateCollectorWalk(dt) {
     const k = Math.min(1, stepLen / dist);
     c.position.x += dx * k;
     c.position.z += dz * k;
-    /* character models front along -Z, so face travel direction + PI */
-    const yaw = Math.atan2(dx, dz) + Math.PI;
+    /* This model fronts along +Z (the Tripo/Mixamo exports are not consistent
+       about it — the old boneless collector faced -Z, which is why the +PI was
+       here and why the rigged one moonwalked). No flip. */
+    const yaw = Math.atan2(dx, dz);
     let turn = yaw - c.rotation.y;
     while (turn >  Math.PI) turn -= Math.PI * 2;
     while (turn < -Math.PI) turn += Math.PI * 2;
     c.rotation.y += turn * Math.min(1, dt * 3.2);
   } else {
-    /* settle facing the door, and you */
-    let turn = 0.16 - c.rotation.y;
+    /* Settle facing the door, and you. PI because the model fronts +Z and the
+       room is back along -Z from out here. */
+    let turn = Math.PI - c.rotation.y;
     while (turn >  Math.PI) turn -= Math.PI * 2;
     while (turn < -Math.PI) turn += Math.PI * 2;
     c.rotation.y += turn * Math.min(1, dt * 2.0);
