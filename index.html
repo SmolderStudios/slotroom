@@ -60138,6 +60138,9 @@ function buildTextures() {
     g.textBaseline = 'middle'; g.textAlign = 'center';
     g.fillText('SYMBOL', 8 + C1 / 2, 8 + HDR / 2);
     g.fillText('PAYS', 8 + C1 + 60, 8 + HDR / 2);
+    /* CHANCE is the widest word in the narrowest column — at 28px it ran 4px
+       past the panel border and lost its final E on the wall. */
+    g.font = '900 23px "Arial Black", sans-serif';
     g.fillText('CHANCE', 8 + C2 + 58, 8 + HDR / 2);
 
     /* LIVE numbers: pay and chance both read through the fitted charms, so the
