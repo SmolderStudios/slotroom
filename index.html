@@ -62818,9 +62818,14 @@ function buildHorror() {
      of its approach — it would step out of nothing a second before arriving.
      At this length the whole walk stays legible through the window. */
   const HW = 1.9, HH = 2.5, HLEN = 5.5, hz0 = d / 2;
-  const hFloor = lam({ map: TEX.floor, color: 0x4a4038 });
-  const hWall  = lam({ map: TEX.wall,  color: 0x605245 });
-  const hCeil  = lam({ map: TEX.ceil,  color: 0x2c2620 });
+  /* fog:false on the corridor. The scene's exp2 fog fades toward near-black,
+     and it is applied per-material — so the hall, being entirely beyond the
+     doorway, got fogged to nothing no matter how hot the lamps were. The door's
+     own hardware already opts out the same way. Without this the corridor is a
+     black rectangle behind the bars, which is the bug it was built to fix. */
+  const hFloor = lam({ map: TEX.floor, color: 0x6a5a4a, fog: false });
+  const hWall  = lam({ map: TEX.wall,  color: 0x7a6a58, fog: false });
+  const hCeil  = lam({ map: TEX.ceil,  color: 0x3c342c, fog: false });
   box(HW,  0.10, HLEN, hFloor, DOOR_AT.x,        -0.05,   hz0 + HLEN / 2);
   box(HW,  0.10, HLEN, hCeil,  DOOR_AT.x,         HH,     hz0 + HLEN / 2);
   box(0.10, HH,  HLEN, hWall,  DOOR_AT.x - HW/2,  HH / 2, hz0 + HLEN / 2);
@@ -64998,6 +65003,15 @@ function wireModels() {
     const inst = MODELS.peeker.scene.clone(true);
     fitInstance(inst, 1.98);
     inst.rotation.x = 0.10;
+    /* same reason as the corridor itself: it stands beyond the doorway, where
+       the scene fog would erase it before you ever saw it move */
+    inst.traverse(o => {
+      if (o.isMesh && o.material) {
+        o.material = o.material.clone();
+        o.material.fog = false;
+        o.material.needsUpdate = true;
+      }
+    });
     horror.hallFigure.add(inst);
     horror.hallBody = inst;
     horror.hallBodyY = inst.position.y;
