@@ -62850,6 +62850,21 @@ function buildHorror() {
     return L;
   });
 
+  /* ---- the collector's chair, partway down the hall. It waits out there all
+     night where you can see it through the barred window, and only gets up when
+     the night's debt comes due. Set off-centre so it doesn't plug the corridor
+     and kill the view down it. ---- */
+  const seatX = DOOR_AT.x + 0.46, seatZ = hz0 + 3.0;
+  const chairW = lam({ map: TEX.wood,  color: 0x6a5240, fog: false });
+  const chairM = lam({ map: TEX.metal, color: 0x4a4038, fog: false });
+  box(0.46, 0.06, 0.44, chairW, seatX, 0.46, seatZ);                 /* seat */
+  box(0.46, 0.60, 0.06, chairW, seatX, 0.76, seatZ + 0.19);          /* back */
+  [[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]].forEach(([ox, oz]) => {
+    box(0.05, 0.46, 0.05, chairM, seatX + ox, 0.23, seatZ + oz);     /* legs */
+  });
+  horror.collectorSeat = new THREE.Vector3(seatX, 0, seatZ - 0.04);
+  horror.collectorDoor = new THREE.Vector3(DOOR_AT.x, 0, hz0 + 0.62);
+
   /* the anchor the walking figure rides; the model is hung on it in wireModels */
   const hf = new THREE.Group();
   hf.position.set(DOOR_AT.x, 0, hz0 + HLEN - 1.2);
@@ -64994,14 +65009,25 @@ function wireModels() {
   /* THE COLLECTOR — no placeholder existed; stand it in the NE corner, lurking,
      turned to face into the room toward the player */
   if (MODELS.collector) {
-    const h = placeModel('collector', { pos: new THREE.Vector3(3.25, 0, -1.7), height: 1.95, rotationY: 2.4 });
+    /* It used to lurk in the room's NE corner all night, which put it inside
+       with you and made the tray at the door come from nowhere. It now waits
+       OUT in the corridor, sat in its chair where you can see it through the
+       barred window, and only comes to the door when the debt falls due. */
+    const seat = horror.collectorSeat || new THREE.Vector3(-0.29, 0, 6.2);
+    const h = placeModel('collector', { pos: seat.clone(), height: 1.95, rotationY: 0.16 });
     if (h) {
       h.children[0].rotation.x = 0.16;   /* hunch forward — a lurch, not a stiff T */
       LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
-      /* it no longer just stands there all night — updateCollectorWalk drives it */
+      /* beyond the doorway, so the scene fog would otherwise erase it */
+      h.traverse(o => {
+        if (o.isMesh && o.material) {
+          o.material = o.material.clone();
+          o.material.fog = false;
+          o.material.needsUpdate = true;
+        }
+      });
       horror.collector = h;
-      horror.collectorHome = h.position.clone();
-      horror.collectorHomeY = h.rotation.y;
+      horror.collectorSeated = 1;        /* 1 = sat down, 0 = on its feet */
     }
   }
   /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
@@ -65082,33 +65108,43 @@ function updateHallWalk(dt) {
    `horror.collectorAtDoor` goes true on arrival, which is the hook for making
    the tray appear because it arrived rather than on a timer. */
 const _colTgt = new THREE.Vector3();
+const SIT_DROP = 0.40;      /* how far the figure sinks to read as seated */
 function updateCollectorWalk(dt) {
   const c = horror.collector;
-  if (!c || !horror.collectorHome) return;
+  if (!c || !horror.collectorSeat) return;
 
   const wantDoor = !!(game.offering && !game.paid && !game.runOver);
-  if (wantDoor) _colTgt.set(DOOR_AT.x + 0.20, c.position.y, ROOM.d / 2 - 0.95);
-  else          _colTgt.copy(horror.collectorHome);
+  _colTgt.copy(wantDoor ? horror.collectorDoor : horror.collectorSeat);
 
   const dx = _colTgt.x - c.position.x, dz = _colTgt.z - c.position.z;
   const dist = Math.hypot(dx, dz);
   const moving = dist > 0.07;
 
-  if (moving) {
-    /* it comes to collect faster than it leaves */
-    const stepLen = (wantDoor ? 0.80 : 0.55) * dt;
+  /* Sit/stand. There is no rig to fold, so "seated" is the whole figure sunk
+     to seat height behind the chair back — crude up close, but it is only ever
+     read from across a corridor through a barred window, where it works. It
+     stands BEFORE it starts walking, so you see it rise and then come. */
+  const wantSeated = (!wantDoor && !moving) ? 1 : 0;
+  horror.collectorSeated += (wantSeated - horror.collectorSeated) * Math.min(1, dt * 2.4);
+  c.position.y = -SIT_DROP * horror.collectorSeated;
+
+  /* don't walk until it's most of the way up out of the chair */
+  const risen = horror.collectorSeated < 0.25;
+
+  if (moving && risen) {
+    const stepLen = (wantDoor ? 0.85 : 0.60) * dt;   /* comes faster than it goes */
     const k = Math.min(1, stepLen / dist);
     c.position.x += dx * k;
     c.position.z += dz * k;
-    /* character models front along -Z, so face along travel + PI */
+    /* character models front along -Z, so face travel direction + PI */
     const yaw = Math.atan2(dx, dz) + Math.PI;
     let turn = yaw - c.rotation.y;
     while (turn >  Math.PI) turn -= Math.PI * 2;
     while (turn < -Math.PI) turn += Math.PI * 2;
     c.rotation.y += turn * Math.min(1, dt * 3.2);
-  } else if (wantDoor) {
-    /* stood at the door, turned back to face the room — and you */
-    let turn = (horror.collectorHomeY + Math.PI) - c.rotation.y;
+  } else if (!moving) {
+    /* settle facing the door (and you) whether waiting or sat back down */
+    let turn = 0.16 - c.rotation.y;
     while (turn >  Math.PI) turn -= Math.PI * 2;
     while (turn < -Math.PI) turn += Math.PI * 2;
     c.rotation.y += turn * Math.min(1, dt * 2.0);
