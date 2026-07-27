@@ -100,6 +100,20 @@
   .card .d{font-size:clamp(11px,1.2vw,14px);color:#c8b8a4;line-height:1.6;
     font-family:ui-monospace,Consolas,monospace;letter-spacing:0}
   .card .pick{margin-top:auto;font-size:12px;color:#ff8a1e;letter-spacing:2px}
+  /* charm ladder: tier badge, ownership, and what the card leads on to */
+  .card .k .tier{font-weight:400;margin-left:6px;padding:1px 5px;border:1px solid #6a5a48;
+    color:#e0c88a;letter-spacing:1px;font-size:10px}
+  .card .own{font-size:11px;color:#7ed321;letter-spacing:1px}
+  .card .lead{font-size:11px;color:#8a7a68;letter-spacing:.5px;font-style:italic}
+  /* a colour per kind so four cards read apart at a glance */
+  .card.k-PAYOUT{border-color:#6a4a2a}
+  .card.k-PATTERN{border-color:#2a4a6a}
+  .card.k-TEMPO{border-color:#4a5a3a}
+  .card.k-NERVE{border-color:#43505a}
+  .card.k-GREED{border-color:#6a5a1a}
+  .card.k-FUSED{border-color:#5a3a6a}
+  .card.k-PAYOUT:hover,.card.k-PATTERN:hover,.card.k-TEMPO:hover,
+  .card.k-NERVE:hover,.card.k-GREED:hover,.card.k-FUSED:hover{border-color:#ff8a1e}
 
   /* escape menu */
   #menu .row{display:flex;align-items:center;gap:16px;font-size:clamp(12px,1.4vw,16px);
@@ -60766,6 +60780,11 @@ function buff(m, field, key) {
     else if (field === 'all')   v += c.all || 0;
     else if (field === 'head')  v += c.head || 0;
     else if (field === 'cloverWeight') v += c.cloverWeight || 0;
+    else if (field === 'symWeight') v += (c.symWeight && c.symWeight[key]) || 0;
+    /* stackable charms appear in m.charms once per copy, so these just add up */
+    else if (field === 'spinCost') v += c.spinCost || 0;
+    else if (field === 'timer')  v += c.timer || 0;
+    else if (field === 'clovers') v += c.clovers || 0;
   }
   return v;
 }
@@ -61055,12 +61074,24 @@ const PATTERNS = [
   { id: 'JACKPOT', mult: 10.0, lines: [_everything] },
 ];
 
+/* Reel weighting. Charms can now tilt ANY symbol, not just clovers.
+   This exists because a percentage buff on a rare symbol is close to worthless:
+   candles are 34/106 of the reel and skulls are 4/106, so three-in-a-row is
+   roughly six hundred times rarer for skulls while paying only eleven times
+   more. Buying "skulls pay +45%" moved the average by under 2%, which made the
+   whole top half of the ladder a trap. The upper tiers now also DRAW the
+   symbol to you, which is both the fix and the better fantasy. */
 function rollSymbol(m) {
-  /* LUCK PURSE tilts the clover weight, so the total has to be recomputed */
-  const bonus = buff(m, 'cloverWeight');
-  let r = Math.random() * (WEIGHT_TOTAL + bonus);
+  const cw = buff(m, 'cloverWeight');
+  let total = WEIGHT_TOTAL + cw;
+  const add = {};
   for (const s of SYMBOLS) {
-    r -= s.w + (s.id === 'clover' ? bonus : 0);
+    const w = buff(m, 'symWeight', s.id);
+    if (w) { add[s.id] = w; total += w; }
+  }
+  let r = Math.random() * total;
+  for (const s of SYMBOLS) {
+    r -= s.w + (s.id === 'clover' ? cw : 0) + (add[s.id] || 0);
     if (r <= 0) return s;
   }
   return SYMBOLS[0];
@@ -61805,6 +61836,9 @@ const BASE_SPINS = 14;
    ~154 and cost 42. That clears night 1 and 2 comfortably and goes negative
    from night 3, which is where the charms are supposed to take over. */
 const SPIN_COST = 3;
+/* SHORT CHANGE knocks coins off, but a spin is never free — at zero the whole
+   quota loop stops meaning anything. */
+const spinCost = (m) => Math.max(1, SPIN_COST - buff(m || myMachine, 'spinCost'));
 const roundQuota = n => Math.round(70 * Math.pow(1.30, n - 1));
 /* each player owes their own share, so the dealer's total take scales with
    the number of people in the room */
@@ -61863,32 +61897,163 @@ const canForge = () => game.builtShovel || game.parts >= SHOVEL_PARTS;
    Every effect is read through buff() at the point of use, so adding one
    here is the only edit needed. */
 
+/* ---------------------------------------------------------------- [S-09b]
+   CHARMS. Rebuilt 2026-07-27 into a LADDER rather than a flat list.
+
+   The old set was 12 charms that each arrived finished — WAX SEAL doubled
+   candles outright, and once you had it that symbol was done forever. You
+   bought a thing, the number went up, and there was nothing further to want
+   from it. So every value here is cut, and the difference is sold back to you
+   in stages: a symbol you commit to climbs I -> II -> III instead of maxing in
+   one purchase, and pairs of finished lines FUSE into something neither half
+   could do alone.
+
+   Fields the rest of the game reads (see buff/buffRoom):
+     sym{id}      extra multiple of that symbol's pay        (0.45 = +45%)
+     pat{ID}      flat add to that pattern's multiplier
+     all          extra multiple on every win
+     spins        extra spins per night
+     head         coins handed to you at the start of a night
+     cloverWeight tilts the reel toward clovers
+     wild         clovers substitute for any symbol
+     power / dread                                           room-wide
+     spinCost     knocks coins off the price of a spin (floors at 1)
+     timer        extra seconds before the collector breaks in
+     clovers      clovers handed over per night
+
+   `needs`  — hidden from every pool until those charms are owned. This is what
+              makes the tiers a ladder instead of a lottery.
+   `stack`  — may be taken more than once; effects add up.
+   `tier`   — display only, so a card can say where on the ladder it sits. */
+
+/* Symbol ladders. Generated from one table because sixteen near-identical
+   hand-written entries is where typos live — and because keeping the tier
+   numbers in ONE place is the only way the curve stays honest. Tier I is a
+   taste, II is the commitment, III is a real investment gated behind both. */
+const _SYM_LADDER = [
+  /* symbol,     I name,          II name,          III name,        base cost */
+  ['candle',    'TALLOW STUB',   'VIGIL WAX',      'THE LONG WAKE',   34],
+  ['moth',      'MOTH DUST',     'LAMPFEEDER',     'THE SWARM',       40],
+  ['eye',       'GLASS EYE',     'SIXTH SENSE',    'THE WATCHFUL',    52],
+  ['spider',    'SILK KNOT',     'WEAVER',         'BROODMOTHER',     66],
+  ['coffin',    'COFFIN NAIL',   'PALL BEARER',    'THE PROCESSION',  80],
+  ['clover',    'PRESSED CLOVER','GREEN SAINT',    'FOUR-LEAF CROWN', 96],
+  ['skull',     'BONE MEAL',     'OSSUARY',        'THE CHARNEL',    120],
+  ['pentagram', 'CHALK MARK',    'SIGIL WORK',     'THE COVENANT',   150],
+];
+/* The fourth column is a TARGET reel weight, not an amount to add. Line odds go
+   as p^3..p^5, so adding weight in proportion to what a symbol already has
+   compounds violently for common ones (candles hit ~7x base in the sim) while
+   still leaving rare ones dead. Pulling each symbol UP TOWARD a floor instead
+   means the commons — already everywhere — gain nothing from it and stay a pure
+   percentage play, while the rare, high-paying end finally gets enough presence
+   to line up at all. Reel weights for reference: candle 34 ... pentagram 3. */
+const _SYM_TIERS = [
+  /* add,  costMult, tier, target weight */
+  [0.45, 1.00, 'I',    0],
+  [0.70, 1.85, 'II',   9],
+  [1.10, 3.30, 'III', 18],
+];
+const _symCharms = [];
+for (const [sym, n1, n2, n3, base] of _SYM_LADDER) {
+  const names = [n1, n2, n3];
+  const S = SYMBOLS.find(s => s.id === sym);
+  const pretty = sym[0].toUpperCase() + sym.slice(1) + 's';
+  for (let t = 0; t < 3; t++) {
+    const [add, cm, tier, targetW] = _SYM_TIERS[t];
+    const wAdd = Math.max(0, targetW - S.w);
+    _symCharms.push({
+      id: sym + '_' + (t + 1),
+      name: names[t],
+      kind: 'PAYOUT', tier,
+      cost: Math.round(base * cm),
+      desc: pretty + ' pay +' + Math.round(add * 100) + '%'
+            + (wAdd ? ', and land more often.' : '.'),
+      sym: { [sym]: add },
+      symWeight: wAdd ? { [sym]: wAdd } : null,
+      needs: t === 0 ? null : [sym + '_' + t],
+    });
+  }
+}
+
 const CHARMS = [
-  { id: 'waxseal',  name: 'WAX SEAL',      kind: 'PAYOUT', cost: 50,
-    desc: 'Candles pay double.', sym: { candle: 1.0 } },
-  { id: 'mothdust', name: 'MOTH DUST',     kind: 'PAYOUT', cost: 56,
-    desc: 'Moths pay double.', sym: { moth: 1.0 } },
-  { id: 'bonemeal', name: 'BONE MEAL',     kind: 'PAYOUT', cost: 90,
-    desc: 'Skulls pay +150%.', sym: { skull: 1.5 } },
-  { id: 'sixthsense', name: 'SIXTH SENSE', kind: 'PATTERN', cost: 105,
-    desc: 'EYE and DIAG +4.0.', pat: { EYE: 4, DIAG: 4 } },
-  { id: 'longarm',  name: 'LONG ARM',      kind: 'PATTERN', cost: 112,
-    desc: 'HOR-L and HOR-XL +2.0.', pat: { 'HOR-L': 2, 'HOR-XL': 2 } },
-  { id: 'greedcut', name: 'GREED',         kind: 'PAYOUT', cost: 98,
-    desc: 'All wins +25%. Dread rises faster.', all: 0.25, dread: 0.5 },
-  { id: 'extraspin', name: 'ONE MORE',     kind: 'TEMPO', cost: 84,
-    desc: '+3 spins every night.', spins: 3 },
-  { id: 'ironnerve', name: 'IRON NERVE',   kind: 'NERVE', cost: 63,
-    desc: 'Dread rises 40% slower.', dread: -0.4 },
-  { id: 'fusetape', name: 'FUSE TAPE',     kind: 'NERVE', cost: 77,
+  ..._symCharms,
+
+  /* ---- PATTERN. Small flat adds; the big multipliers are already on the
+     board, so these tilt which shape you want rather than replacing it. ---- */
+  { id: 'straightedge', name: 'STRAIGHT EDGE', kind: 'PATTERN', tier: 'I', cost: 48,
+    desc: 'HOR +0.5.', pat: { HOR: 0.5 } },
+  { id: 'longarm',   name: 'LONG ARM',       kind: 'PATTERN', tier: 'II', cost: 92,
+    desc: 'HOR-L +1.0, HOR-XL +1.0.', pat: { 'HOR-L': 1, 'HOR-XL': 1 }, needs: ['straightedge'] },
+  { id: 'fullspan',  name: 'FULL SPAN',      kind: 'PATTERN', tier: 'III', cost: 170,
+    desc: 'HOR-XL +2.5.', pat: { 'HOR-XL': 2.5 }, needs: ['longarm'] },
+  { id: 'crookedeye', name: 'CROOKED EYE',   kind: 'PATTERN', tier: 'I', cost: 55,
+    desc: 'DIAG +0.8.', pat: { DIAG: 0.8 } },
+  { id: 'serpent',   name: 'SERPENT',        kind: 'PATTERN', tier: 'II', cost: 104,
+    desc: 'ZIG +1.5, ZAG +1.5.', pat: { ZIG: 1.5, ZAG: 1.5 }, needs: ['crookedeye'] },
+  { id: 'highlow',   name: 'HIGH AND LOW',   kind: 'PATTERN', tier: 'II', cost: 118,
+    desc: 'ABOVE +2.0, BELOW +2.0.', pat: { ABOVE: 2, BELOW: 2 } },
+  { id: 'thirdeye',  name: 'THIRD EYE',      kind: 'PATTERN', tier: 'III', cost: 165,
+    desc: 'EYE +3.0.', pat: { EYE: 3 }, needs: ['crookedeye'] },
+
+  /* ---- TEMPO. Time and float. Nerfed hard from the old +3 spins / 40 coins
+     because both were auto-buys — they now come in ones and twos. ---- */
+  { id: 'onemore',   name: 'ONE MORE',       kind: 'TEMPO', tier: 'I', cost: 62,
+    desc: '+1 spin every night.', spins: 1, stack: true },
+  { id: 'nightowl',  name: 'NIGHT OWL',      kind: 'TEMPO', tier: 'II', cost: 128,
+    desc: '+2 more spins every night.', spins: 2, needs: ['onemore'] },
+  { id: 'deeppocket', name: 'DEEP POCKETS',  kind: 'TEMPO', tier: 'I', cost: 54,
+    desc: 'Start each night with 15 coins.', head: 15, stack: true },
+  { id: 'shortchange', name: 'SHORT CHANGE', kind: 'TEMPO', tier: 'II', cost: 96,
+    desc: 'Spins cost 1 less.', spinCost: 1 },
+  { id: 'gleaner',   name: 'GLEANER',        kind: 'TEMPO', tier: 'I', cost: 70,
+    desc: '+1 clover every night.', clovers: 1, stack: true },
+
+  /* ---- NERVE. Keeping the room off your back. ---- */
+  { id: 'ironnerve', name: 'IRON NERVE',     kind: 'NERVE', tier: 'I', cost: 58,
+    desc: 'Dread rises 25% slower.', dread: -0.25 },
+  { id: 'deadcalm',  name: 'DEAD CALM',      kind: 'NERVE', tier: 'II', cost: 112,
+    desc: 'Dread rises a further 35% slower.', dread: -0.35, needs: ['ironnerve'] },
+  { id: 'fusetape',  name: 'FUSE TAPE',      kind: 'NERVE', tier: 'II', cost: 88,
     desc: 'The power never cuts again.', power: true },
-  { id: 'luckpurse', name: 'LUCK PURSE',   kind: 'PAYOUT', cost: 105,
-    desc: 'Clovers pay triple, and land more often.',
-    sym: { clover: 2.0 }, cloverWeight: 6 },
-  { id: 'wildclover', name: 'WILD CLOVER', kind: 'RARE', cost: 182,
-    desc: 'Clovers count as ANY symbol.', wild: true },
-  { id: 'deeppocket', name: 'DEEP POCKETS', kind: 'TEMPO', cost: 70,
-    desc: 'Start each night with 40 coins.', head: 40 },
+  { id: 'stalltime', name: 'STALLING',       kind: 'NERVE', tier: 'I', cost: 66,
+    desc: '+8 seconds before it breaks the door.', timer: 8, stack: true },
+
+  /* ---- GREED. Flat multipliers on everything, paid for in dread. ---- */
+  { id: 'greedcut',  name: 'GREED',          kind: 'GREED', tier: 'I', cost: 90,
+    desc: 'All wins +12%. Dread rises faster.', all: 0.12, dread: 0.35 },
+  { id: 'avarice',   name: 'AVARICE',        kind: 'GREED', tier: 'II', cost: 178,
+    desc: 'All wins +18% more. Dread rises faster still.',
+    all: 0.18, dread: 0.45, needs: ['greedcut'] },
+
+  /* ---- FUSED. Two finished lines welded into one thing neither could do.
+     These are the reason to go deep on a pair rather than wide on everything,
+     and the `needs` gate means they can only ever show up once you have. ---- */
+  { id: 'wildclover', name: 'WILD CLOVER',   kind: 'FUSED', tier: '★', cost: 210,
+    desc: 'Clovers count as ANY symbol.', wild: true, needs: ['clover_2'] },
+  { id: 'nightvigil', name: 'NIGHT VIGIL',   kind: 'FUSED', tier: '★', cost: 165,
+    desc: 'Candles and moths both pay +80% on top.',
+    sym: { candle: 0.8, moth: 0.8 }, needs: ['candle_2', 'moth_2'] },
+  /* The fused charms that feed RARE symbols carry reel weight as well as pay.
+     Without it they were traps: BONE ORCHARD is five charms and 800 coins deep
+     and moved the average by half a coin a spin, because skulls and coffins
+     still almost never lined up. Pay alone cannot rescue a symbol you never
+     see — same lesson as the ladder tiers above. */
+  { id: 'boneorchard', name: 'BONE ORCHARD', kind: 'FUSED', tier: '★', cost: 235,
+    desc: 'Skulls and coffins pay +100% and crowd the reels.',
+    sym: { skull: 1.0, coffin: 1.0 }, symWeight: { skull: 7, coffin: 7 },
+    needs: ['skull_2', 'coffin_2'] },
+  { id: 'allseeing', name: 'ALL-SEEING',     kind: 'FUSED', tier: '★', cost: 220,
+    desc: 'Eyes pay +90%, land far more often, and EYE pays +4.0.',
+    sym: { eye: 0.9 }, symWeight: { eye: 8 }, pat: { EYE: 4 },
+    needs: ['eye_2', 'thirdeye'] },
+  { id: 'blackmass', name: 'BLACK MASS',     kind: 'FUSED', tier: '★', cost: 290,
+    desc: 'Pentagrams pay +150%, appear far more often, and all wins +10%.',
+    sym: { pentagram: 1.5 }, symWeight: { pentagram: 9 }, all: 0.10,
+    needs: ['pentagram_2'] },
+  { id: 'spinnersluck', name: "SPINNER'S LUCK", kind: 'FUSED', tier: '★', cost: 195,
+    desc: '+2 spins, and clovers land far more often.',
+    spins: 2, cloverWeight: 7, needs: ['clover_1', 'onemore'] },
 ];
 
 const charmById = id => CHARMS.find(c => c.id === id);
@@ -61915,6 +62080,25 @@ function clearCharmTokens() {
 }
 
 function hasCharm(id) { return MACHINES.some(m => m.charms.includes(id)); }
+/* how many copies you hold — stackable charms can be taken again */
+function charmCount(id) {
+  let n = 0;
+  for (const m of MACHINES) for (const c of m.charms) if (c === id) n++;
+  return n;
+}
+/* One gate for every place a charm can be offered. A charm is available when
+   it isn't already taken (unless it stacks) AND its prerequisites are all
+   owned — that `needs` check is what turns the list into a ladder: tier II
+   simply does not exist for you until tier I is on the rack. Cap the stacks so
+   a run cannot become nothing but ONE MORE. */
+const STACK_CAP = 3;
+function charmAvailable(c) {
+  if (!c) return false;
+  if (c.stack ? charmCount(c.id) >= STACK_CAP : hasCharm(c.id)) return false;
+  if (c.needs && !c.needs.every(hasCharm)) return false;
+  return true;
+}
+const charmPool = () => CHARMS.filter(charmAvailable);
 
 const el = {
   coins: document.getElementById('coins'),
@@ -61993,10 +62177,11 @@ function tryPull() {
   if (!horror.power) { toast('NO POWER — CHECK THE FUSEBOX', 2000); AUDIO.lose(); return; }
   if (game.runOver || game.settling) return;
   if (game.spins <= 0) { toast('NO SPINS LEFT'); paintTop('EMPTY', '#ff3d3d'); return; }
-  if (game.coins < SPIN_COST) {
-    toast('NOT EVEN ' + SPIN_COST + ' LEFT', 2000); AUDIO.lose(); return;
+  const cost = spinCost(myMachine);
+  if (game.coins < cost) {
+    toast('NOT EVEN ' + cost + ' LEFT', 2000); AUDIO.lose(); return;
   }
-  game.coins -= SPIN_COST;
+  game.coins -= cost;
   spin(myMachine);
 }
 
@@ -62164,7 +62349,7 @@ const COLLECT_SECONDS = 30;
 
 function beginOffer() {
   game.offering = true;
-  game.collectT = COLLECT_SECONDS;
+  game.collectT = COLLECT_SECONDS + buff(myMachine, 'timer');   /* STALLING */
   horror.eyesT = 1;
   horror.doorShake = 1;
   AUDIO.bang(3);
@@ -62203,7 +62388,7 @@ const shop = { open: false, items: [], group: null };
 
 function openShop() {
   closeShop();
-  const pool = CHARMS.filter(c => !hasCharm(c.id));
+  const pool = charmPool();
   if (!pool.length) { finishNight(); return; }
 
   /* clovers are luck: each one nudges the tray toward the rarer figures */
@@ -62382,12 +62567,68 @@ const FIGURES = {
   },
 };
 
+/* Procedural token for any charm without a hand-built figure. With the charm
+   list now in the dozens, modelling each one is not on — but falling back to a
+   single shape (they all used to become a wax seal) makes a shelf of identical
+   objects, which is worse than no model at all. So the shape comes from the
+   KIND, the colour from the symbol it feeds, and the height from the tier: a
+   glance at the rack tells you what sort of run you have been building.
+   Emissive stays low — the composite bloom turns any bright small object into a
+   white blob with no silhouette (learned the hard way on the first figurines). */
+const _SYM_COLOR = {};
+for (const s of SYMBOLS) _SYM_COLOR[s.id] = parseInt(s.color.slice(1), 16);
+const _KIND_COLOR = { PAYOUT: 0xd8b070, PATTERN: 0x88b0d0, TEMPO: 0xc0c8a0,
+                      NERVE: 0x9aa8b0, GREED: 0xe0b040, FUSED: 0xc890e8 };
+
+function proceduralFigure(g, c) {
+  const symId = c.sym ? Object.keys(c.sym)[0] : null;
+  const col = (symId && _SYM_COLOR[symId]) || _KIND_COLOR[c.kind] || 0xb0a080;
+  const t = c.tier === 'III' ? 2 : c.tier === 'II' ? 1 : c.tier === '★' ? 3 : 0;
+  const stone = dullMat(0x6a5f52);
+
+  if (c.kind === 'PATTERN') {
+    /* a little slate with pips punched in it — reads as a payline card */
+    part(g, new THREE.BoxGeometry(0.11, 0.13, 0.014), dullMat(0x4a4038), 0, 0.09);
+    for (let i = 0; i <= t; i++)
+      part(g, new THREE.BoxGeometry(0.085, 0.012, 0.006), figMat(col, 0.55), 0, 0.058 + i * 0.026, 0.010);
+  } else if (c.kind === 'TEMPO') {
+    /* pinched hourglass */
+    part(g, new THREE.CylinderGeometry(0.042, 0.012, 0.055, 7), dullMat(0xcfc6ae), 0, 0.05);
+    part(g, new THREE.CylinderGeometry(0.012, 0.042, 0.055, 7), dullMat(0xcfc6ae), 0, 0.104);
+    part(g, new THREE.CylinderGeometry(0.046, 0.046, 0.008, 7), stone, 0, 0.135);
+  } else if (c.kind === 'NERVE') {
+    /* an iron nail, bent over */
+    part(g, new THREE.CylinderGeometry(0.010, 0.010, 0.14, 6), dullMat(0x8a8f96), 0, 0.09);
+    part(g, new THREE.CylinderGeometry(0.026, 0.026, 0.012, 6), dullMat(0x9aa0a8), 0, 0.164);
+    part(g, new THREE.CylinderGeometry(0.008, 0.008, 0.05, 6), dullMat(0x8a8f96),
+      0.022, 0.155, 0, 0, 0, Math.PI / 2.4);
+  } else if (c.kind === 'GREED') {
+    /* a stack of coins, taller the deeper you are in */
+    for (let i = 0; i <= t + 1; i++)
+      part(g, new THREE.CylinderGeometry(0.038, 0.038, 0.016, 8), figMat(col, 0.5),
+        (i % 2) * 0.004, 0.03 + i * 0.018);
+  } else if (c.kind === 'FUSED') {
+    /* a cut stone on a claw — the only ones that get a halo */
+    part(g, new THREE.CylinderGeometry(0.016, 0.030, 0.055, 6), stone, 0, 0.05);
+    part(g, new THREE.OctahedronGeometry(0.052), figMat(col, 1.0), 0, 0.125);
+    part(g, new THREE.OctahedronGeometry(0.021), figMat(0xfff0c0, 0.8), 0, 0.125);
+  } else {
+    /* PAYOUT — a struck token on a short post, thicker each tier */
+    part(g, new THREE.CylinderGeometry(0.014, 0.022, 0.045 + t * 0.012, 6), stone, 0, 0.04);
+    part(g, new THREE.CylinderGeometry(0.050, 0.050, 0.016 + t * 0.008, 9), figMat(col, 0.55),
+      0, 0.095 + t * 0.012, 0, Math.PI / 2.6);
+    if (t >= 2) part(g, new THREE.TorusGeometry(0.055, 0.008, 4, 9), dullMat(0xb8a880),
+      0, 0.095 + t * 0.012, 0, Math.PI / 2.6);
+  }
+}
+
 function charmFigure(c) {
   const grp = new THREE.Group();
   /* common plinth so everything lines up on the tray */
   part(grp, new THREE.CylinderGeometry(0.072, 0.082, 0.022, 8),
     lam({ map: TEX.metal, color: 0x6a5a48 }), 0, 0.011);
-  (FIGURES[c.id] || FIGURES.waxseal)(grp);
+  if (FIGURES[c.id]) FIGURES[c.id](grp);
+  else proceduralFigure(grp, c);
   return grp;
 }
 
@@ -62403,7 +62644,14 @@ function priceTag(c) {
     do { g.font = '900 ' + fs + 'px "Arial Black", sans-serif'; fs -= 1; }
     while (fs > 11 && g.measureText(c.name).width > w - 18);
     g.fillStyle = '#ffc65a';
-    g.fillText(c.name, w / 2, 26);
+    g.fillText(c.name, w / 2, 24);
+    /* tier on the tag itself — with three rungs per symbol the name alone no
+       longer tells you which one is on the tray */
+    if (c.tier) {
+      g.font = '900 13px "Arial Black", sans-serif';
+      g.fillStyle = '#9a8a6a';
+      g.fillText(c.kind + '  ' + c.tier, w / 2, 41);
+    }
 
     drawCoin(g, 52, 60, 11, '#ffd34d');
     g.font = '900 27px "Arial Black", sans-serif';
@@ -62439,11 +62687,19 @@ function buyAimed() {
   it.sold = true;
   shop.group.remove(it.mesh);
   shop.group.remove(it.tag);
-  /* Buying picks it up. It is not on a machine until you carry it to a rack,
-     and you may put it on either one — including your partner's. */
-  player.carrying = it.charm.id;
   AUDIO.win(120);
-  toast('CARRYING ' + it.charm.name + ' — PUT IT ON A MACHINE', 2600);
+  /* Carrying it to a rack only ever mattered because you might put it on your
+     PARTNER's machine. Solo there is exactly one rack, so the walk was pure
+     ceremony between wanting a charm and having it — it goes straight on.
+     Co-op keeps the carry, because there the choice is real. */
+  if (net.connected) {
+    player.carrying = it.charm.id;
+    toast('CARRYING ' + it.charm.name + ' — PUT IT ON A MACHINE', 2600);
+  } else {
+    myMachine.charms.push(it.charm.id);
+    spawnCharmToken(myMachine, it.charm.id, myMachine.charms.length - 1);
+    toast(it.charm.name + ' — FITTED', 2200);
+  }
   syncHUD();
 }
 
@@ -62485,7 +62741,7 @@ function rerollShop() {
 /* The tribute: one charm on the house, offered after the collector leaves.
    Straight compensation for the spins now costing money. */
 function offerFreeCharm() {
-  const pool = CHARMS.filter(c => !hasCharm(c.id));
+  const pool = charmPool();
   /* while you still need shovel parts, the salesman also slips one onto the tray —
      take the part and forgo the charm, or take the charm and stay chained longer */
   const needParts = myMachine && !game.builtShovel && game.parts < SHOVEL_PARTS;
@@ -62493,8 +62749,19 @@ function offerFreeCharm() {
 
   const cards = [];
   if (needParts) cards.push({ part: true });
+  /* Four on the tray, not three, and deliberately spread across kinds so the
+     offer is a CHOICE rather than three flavours of the same idea — with the
+     list this long, an unweighted draw kept handing over three symbol charms. */
   const pick = [];
-  while (pick.length < Math.min(3, pool.length)) {
+  const byKind = {};
+  for (const c of pool) (byKind[c.kind] = byKind[c.kind] || []).push(c);
+  const kinds = Object.keys(byKind).sort(() => Math.random() - 0.5);
+  for (const k of kinds) {
+    if (pick.length >= 4) break;
+    const bucket = byKind[k];
+    pick.push(bucket[(Math.random() * bucket.length) | 0]);
+  }
+  while (pick.length < Math.min(4, pool.length)) {
     const c = pool[(Math.random() * pool.length) | 0];
     if (!pick.includes(c)) pick.push(c);
   }
@@ -62523,9 +62790,18 @@ function offerFreeCharm() {
       });
     } else {
       const c = card.charm;
-      el.innerHTML = '<span class="k">' + c.kind + '</span>' +
+      /* Tier badge and the "leads to" line are the whole point of the ladder —
+         without them a tier I charm reads as a weak card rather than the first
+         rung of something. Owned copies show too, for the stackables. */
+      const have = charmCount(c.id);
+      const next = CHARMS.find(x => x.needs && x.needs.includes(c.id));
+      el.className = 'card k-' + c.kind;
+      el.innerHTML = '<span class="k">' + c.kind +
+                       (c.tier ? '<b class="tier">' + c.tier + '</b>' : '') + '</span>' +
                      '<span class="n">' + c.name + '</span>' +
                      '<span class="d">' + c.desc + '</span>' +
+                     (have ? '<span class="own">OWNED ×' + have + '</span>' : '') +
+                     (next ? '<span class="lead">leads to ' + next.name + '</span>' : '') +
                      '<span class="pick">TAKE — FREE</span>';
       el.addEventListener('click', () => {
         myMachine.charms.push(c.id);
@@ -62570,6 +62846,7 @@ function nextNight() {
   game.quota = roundQuota(game.round);
   game.spins = roundSpins();
   game.coins += buff(myMachine, 'head');            /* DEEP POCKETS */
+  game.clovers += buff(myMachine, 'clovers');       /* GLEANER */
   horror.dread = Math.min(1, horror.dread + 0.08);
   paintTop('NIGHT ' + game.round, '#ffb524');
   toast('NIGHT ' + game.round, 2000);
@@ -65812,7 +66089,7 @@ function updatePrompt() {
     const fm = focus.machine;
     if ((fm && fm.reels.spinning) || game.settling) label = '[ Q ] STAND UP';
     else if (!horror.power)              label = 'NO POWER     [ Q ] STAND UP';
-    else label = (game.spins > 0 ? '[ E ] PULL LEVER  (' + SPIN_COST + ')' : '[ E ] NO SPINS LEFT') +
+    else label = (game.spins > 0 ? '[ E ] PULL LEVER  (' + spinCost(myMachine) + ')' : '[ E ] NO SPINS LEFT') +
                  '     [ Q ] STAND UP';
   } else if (shop.open) {
     /* F always works, whether or not you are aimed at a figurine */
@@ -65856,9 +66133,12 @@ function updatePrompt() {
   if (looked && el.itemShown !== looked.charm.id) {
     el.itemShown = looked.charm.id;
     const c = looked.charm;
-    el.iiKind.textContent = c.kind;
+    el.iiKind.textContent = c.kind + (c.tier ? '  ' + c.tier : '');
     el.iiName.textContent = c.name;
-    el.iiDesc.textContent = c.desc;
+    /* say what it leads to, so a cheap tier I reads as an opening rather than
+       a weak buy — the ladder is invisible otherwise */
+    const nxt = CHARMS.find(x => x.needs && x.needs.includes(c.id));
+    el.iiDesc.textContent = c.desc + (nxt ? '   → unlocks ' + nxt.name : '');
     el.iiCost.textContent = c.cost;
   }
   if (looked) el.itemInfo.classList.toggle('poor', game.coins < looked.charm.cost);
