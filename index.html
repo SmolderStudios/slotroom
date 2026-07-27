@@ -60863,7 +60863,13 @@ function buildMachine(idx) {
   m.reels.tex.minFilter = THREE.NearestFilter;
   m.reels.tex.generateMipmaps = false;
   m.reels.tex.colorSpace = THREE.SRGBColorSpace;
-  const screen = new THREE.Mesh(reelDrumGeo(0.43, 0.285, 45),
+  /* 0.196 tall, not 0.285. The recessed window panel measures 0.488 x 0.202 at
+     H_MACH, so the old size overflowed the opening top and bottom and punched
+     back out through the frame — from any off-axis angle you saw the screen
+     jutting out of the cabinet. Arc is 8deg rather than 45: enough curve to
+     catch the light and read as a drum, but a 3mm bulge instead of 28mm, so it
+     physically cannot poke through the bezel again. */
+  const screen = new THREE.Mesh(reelDrumGeo(0.42, 0.196, 8),
     new THREE.MeshBasicMaterial({ map: m.reels.tex }));
   screen.position.set(0, SCREEN_Y, SCREEN_Z);
   g.add(screen);
@@ -60872,8 +60878,8 @@ function buildMachine(idx) {
   /* Column dividers: thin dark ribs following the drum curve, so the five
      columns read as five separate wheels rather than one scrolling picture. */
   for (let c = 1; c < 5; c++) {
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.232, 0.014), matDark);
-    rib.position.set(-0.215 + c * 0.086, SCREEN_Y, SCREEN_Z + 0.036);
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.188, 0.010), matDark);
+    rib.position.set(-0.21 + c * 0.084, SCREEN_Y, SCREEN_Z + 0.012);
     g.add(rib);
   }
 
@@ -63503,6 +63509,7 @@ function showWatcher() {
 function updateHorror(dt) {
   updateBreakIn(dt);
   updateHallWalk(dt);
+  updateCollectorWalk(dt);
 
   /* the collection clock — run it out and it stops asking */
   if (game.offering && !game.paid && game.collectT > 0 && !game.runOver) {
@@ -64991,6 +64998,10 @@ function wireModels() {
     if (h) {
       h.children[0].rotation.x = 0.16;   /* hunch forward — a lurch, not a stiff T */
       LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
+      /* it no longer just stands there all night — updateCollectorWalk drives it */
+      horror.collector = h;
+      horror.collectorHome = h.position.clone();
+      horror.collectorHomeY = h.rotation.y;
     }
   }
   /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
@@ -65060,6 +65071,49 @@ function updateHallWalk(dt) {
       horror.hallLights[i].intensity = horror.power === false ? 0 : 26.0 * f;
     }
   }
+}
+
+/* The collector used to stand in its corner for the entire night while the
+   tray simply appeared at the door out of nowhere. Now it walks the room: when
+   the night's collection opens it crosses to the door, and when the debt is
+   settled it withdraws to its corner. It has no rig, so the sense of walking
+   comes from travel plus the idle sway LIVING already applies — deliberately
+   not fighting that with a second bob. It turns to face the way it is going.
+   `horror.collectorAtDoor` goes true on arrival, which is the hook for making
+   the tray appear because it arrived rather than on a timer. */
+const _colTgt = new THREE.Vector3();
+function updateCollectorWalk(dt) {
+  const c = horror.collector;
+  if (!c || !horror.collectorHome) return;
+
+  const wantDoor = !!(game.offering && !game.paid && !game.runOver);
+  if (wantDoor) _colTgt.set(DOOR_AT.x + 0.20, c.position.y, ROOM.d / 2 - 0.95);
+  else          _colTgt.copy(horror.collectorHome);
+
+  const dx = _colTgt.x - c.position.x, dz = _colTgt.z - c.position.z;
+  const dist = Math.hypot(dx, dz);
+  const moving = dist > 0.07;
+
+  if (moving) {
+    /* it comes to collect faster than it leaves */
+    const stepLen = (wantDoor ? 0.80 : 0.55) * dt;
+    const k = Math.min(1, stepLen / dist);
+    c.position.x += dx * k;
+    c.position.z += dz * k;
+    /* character models front along -Z, so face along travel + PI */
+    const yaw = Math.atan2(dx, dz) + Math.PI;
+    let turn = yaw - c.rotation.y;
+    while (turn >  Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    c.rotation.y += turn * Math.min(1, dt * 3.2);
+  } else if (wantDoor) {
+    /* stood at the door, turned back to face the room — and you */
+    let turn = (horror.collectorHomeY + Math.PI) - c.rotation.y;
+    while (turn >  Math.PI) turn -= Math.PI * 2;
+    while (turn < -Math.PI) turn += Math.PI * 2;
+    c.rotation.y += turn * Math.min(1, dt * 2.0);
+  }
+  horror.collectorAtDoor = wantDoor && !moving;
 }
 
 /* send it down the hall */
