@@ -60148,9 +60148,9 @@ function buildTextures() {
        several purchases ago. Buffed rows are tinted so you can see at a glance
        what your charms have actually changed. */
     const _m = (typeof myMachine !== 'undefined') ? myMachine : null;
-    const _sw = s => (_m ? buff(_m, 'symWeight', s.id) : 0)
-                   + (_m && s.id === 'clover' ? buff(_m, 'cloverWeight') : 0);
-    const total = SYMBOLS.reduce((s, x) => s + x.w + _sw(x), 0);
+    /* weightOf() applies the same floor the reels use, so a culled symbol
+       shows the odds it actually rolls at rather than a negative share */
+    const total = SYMBOLS.reduce((a, x) => a + weightOf(_m, x), 0);
     [...SYMBOLS].sort((a, b) => b.pay - a.pay).forEach((sym, i) => {
       const y = 8 + HDR + i * ROW;
       g.fillStyle = i % 2 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.32)';
@@ -60166,7 +60166,7 @@ function buildTextures() {
       const symUp = _m ? buff(_m, 'sym', sym.id) : 0;
       const allUp = _m ? buff(_m, 'all') : 0;
       const pay = Math.round(sym.pay * (1 + symUp) * (1 + allUp));
-      const chance = ((sym.w + _sw(sym)) / total) * 100;
+      const chance = (weightOf(_m, sym) / total) * 100;
 
       g.textAlign = 'center';
       g.font = '900 32px "Arial Black", sans-serif';
@@ -60174,7 +60174,9 @@ function buildTextures() {
       g.fillText(String(pay), 8 + C1 + 60, y + ROW / 2 + 2);
 
       g.font = '900 26px "Arial Black", sans-serif';
-      g.fillStyle = _sw(sym) > 0 ? '#7ed321' : '#9fd86a';
+      /* green = a charm made it commoner, red = a CULL made it rarer */
+      const _wd = weightOf(_m, sym) - sym.w;
+      g.fillStyle = _wd > 0 ? '#7ed321' : _wd < 0 ? '#e0644a' : '#9fd86a';
       g.fillText(chance.toFixed(chance < 10 ? 1 : 0) + '%', 8 + C2 + 58, y + ROW / 2 + 2);
 
       g.strokeStyle = 'rgba(198,34,30,.9)'; g.lineWidth = 3;
@@ -61259,18 +61261,24 @@ const PATTERNS = [
    more. Buying "skulls pay +45%" moved the average by under 2%, which made the
    whole top half of the ladder a trap. The upper tiers now also DRAW the
    symbol to you, which is both the fix and the better fantasy. */
+/* A symbol's live reel weight: its base, plus everything fitted that pushes it
+   up or (with the CULL charms) pulls it down. FLOORED AT 1 on purpose — a
+   symbol can be made vanishingly rare but never removed, because a reel strip
+   that can't produce one of its own faces breaks every odds display on the
+   wall and turns "rare" into "impossible". One helper so the reels and the
+   symbol board can never disagree about what the odds are. */
+function weightOf(m, s) {
+  let w = s.w + (m ? buff(m, 'symWeight', s.id) : 0);
+  if (s.id === 'clover' && m) w += buff(m, 'cloverWeight');
+  return Math.max(1, w);
+}
 function rollSymbol(m) {
-  const cw = buff(m, 'cloverWeight');
-  let total = WEIGHT_TOTAL + cw;
-  const add = {};
-  for (const s of SYMBOLS) {
-    const w = buff(m, 'symWeight', s.id);
-    if (w) { add[s.id] = w; total += w; }
-  }
+  let total = 0;
+  const w = SYMBOLS.map(s => { const v = weightOf(m, s); total += v; return v; });
   let r = Math.random() * total;
-  for (const s of SYMBOLS) {
-    r -= s.w + (s.id === 'clover' ? cw : 0) + (add[s.id] || 0);
-    if (r <= 0) return s;
+  for (let i = 0; i < SYMBOLS.length; i++) {
+    r -= w[i];
+    if (r <= 0) return SYMBOLS[i];
   }
   return SYMBOLS[0];
 }
@@ -61526,21 +61534,10 @@ function paintReels(m) {
     g.restore();
   }
 
-  /* floating win total, plus which pattern paid the most */
-  if (m.reels.winAmount > 0 && m.reels.flash > 0) {
-    g.save();
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.shadowColor = '#ff3df0'; g.shadowBlur = 16;
-    g.fillStyle = '#ff3df0';
-    g.font = 'bold 34px "Arial Black", sans-serif';
-    g.fillText('+' + m.reels.winAmount, W / 2, H / 2 - 8);
-    if (m.reels.winLabel) {
-      g.font = 'bold 15px "Arial Black", sans-serif';
-      g.fillStyle = '#ffd0f6';
-      g.fillText(m.reels.winLabel, W / 2, H / 2 + 20);
-    }
-    g.restore();
-  }
+  /* The win total used to be stamped in magenta across the middle of the grid,
+     which covered the very cells that had just paid — you could see the number
+     or the line that made it, never both. It lives on the marquee now, which
+     is above the glass and already the thing lit up when you win. */
 
   m.reels.tex.needsUpdate = true;
 }
@@ -61558,20 +61555,41 @@ function roundRect(g, x, y, w, h, r) {
 /* The coin mark: an octagonal token with a square hole, like old cash coins.
    Deliberately NOT a ring-with-a-bar any more — that read as the same glyph
    as the paytable's multiplier mark. */
+/* An octagon with a square punched through it read as a washer, or a Chinese
+   cash coin — anything but money. What actually says "coin" at 10px is a ROUND
+   disc with a MILLED EDGE and something struck into the face, so that's what
+   this draws: notches round the rim, an inset rim line, and a currency mark.
+   All of it cut out of the one fill colour, so it still tints to whatever the
+   caller is using without needing a second shade. */
 function drawCoin(g, cx, cy, r, color) {
   g.save();
   g.fillStyle = color;
-  g.shadowColor = color; g.shadowBlur = 7;
-  g.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-    i ? g.lineTo(x, y) : g.moveTo(x, y);
-  }
-  g.closePath(); g.fill();
+  g.strokeStyle = color;
+  g.shadowColor = color; g.shadowBlur = 6;
+  g.beginPath(); g.arc(cx, cy, r, 0, 6.283); g.fill();
   g.shadowBlur = 0;
+
   g.globalCompositeOperation = 'destination-out';
-  g.fillRect(cx - r * 0.30, cy - r * 0.30, r * 0.60, r * 0.60);
+  g.lineCap = 'butt';
+  /* milled edge — the detail that reads as currency even when it's tiny */
+  g.lineWidth = Math.max(1, r * 0.15);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + 0.26;
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a) * r * 0.86, cy + Math.sin(a) * r * 0.86);
+    g.lineTo(cx + Math.cos(a) * r * 1.05, cy + Math.sin(a) * r * 1.05);
+    g.stroke();
+  }
+  /* inset rim line */
+  g.lineWidth = Math.max(1, r * 0.09);
+  g.beginPath(); g.arc(cx, cy, r * 0.68, 0, 6.283); g.stroke();
+  /* struck mark: a bar through two crossbars */
+  g.lineWidth = Math.max(1, r * 0.15);
+  g.beginPath();
+  g.moveTo(cx, cy - r * 0.42); g.lineTo(cx, cy + r * 0.42);
+  g.moveTo(cx - r * 0.25, cy - r * 0.15); g.lineTo(cx + r * 0.25, cy - r * 0.15);
+  g.moveTo(cx - r * 0.25, cy + r * 0.15); g.lineTo(cx + r * 0.25, cy + r * 0.15);
+  g.stroke();
   g.restore();
 }
 
@@ -61602,29 +61620,42 @@ function paintDeck(m = myMachine) {
   draw(m.deck.bet, String(cost), cost < SPIN_COST ? '#7ed321' : '#ffd66a');
 }
 
-function paintTop(text, color = '#ffffff', coin = false, m = myMachine) {
+/* `sub` is the small second line — which pattern paid, on a win. It is what
+   the magenta overlay inside the reels used to say. With a sub the headline
+   shrinks and shifts up so the two read as one block rather than colliding. */
+function paintTop(text, color = '#ffffff', coin = false, m = myMachine, sub = '') {
   const g = m.topCtx;
   if (!g) return;
   g.fillStyle = '#050203'; g.fillRect(0, 0, 256, 64);
-  g.font = 'bold 34px "Arial Black", sans-serif';
   g.textBaseline = 'middle';
+
+  const big = sub ? 30 : 34;
+  const midY = sub ? 24 : 34;
+  const cr = sub ? 9 : 10;
+  g.font = 'bold ' + big + 'px "Arial Black", sans-serif';
   g.shadowColor = color; g.shadowBlur = 10;
   g.fillStyle = color;
 
   if (coin) {
-    /* text and coin mark together, centred as one unit */
+    /* headline and coin mark centred together as one unit */
     const tw = g.measureText(text).width;
-    const total = tw + 34;
-    const x0 = 128 - total / 2;
+    const x0 = 128 - (tw + cr * 3.4) / 2;
     g.textAlign = 'left';
-    g.fillText(text, x0, 34);
+    g.fillText(text, x0, midY);
     g.shadowBlur = 0;
-    drawCoin(g, x0 + tw + 18, 33, 10, color);
+    drawCoin(g, x0 + tw + cr * 1.8, midY - 1, cr, color);
   } else {
     g.textAlign = 'center';
-    g.fillText(text, 128, 34);
+    g.fillText(text, 128, midY);
   }
   g.shadowBlur = 0;
+
+  if (sub) {
+    g.font = 'bold 15px "Arial Black", sans-serif';
+    g.textAlign = 'center';
+    g.fillStyle = '#b9a684';
+    g.fillText(sub, 128, 50);
+  }
   m.topTex.needsUpdate = true;
 }
 
@@ -62042,7 +62073,7 @@ function moveAxis(axis, amount) {
    it to descend, miss it and the run ends. Quota curve and spin grant were
    picked against the simulation — expected score is ~153/round at 12 spins,
    so round 1 is comfortable and round 4+ needs luck. */
-const BASE_SPINS = 14;
+const BASE_SPINS = 9;
 /* Sized against the simulation: ~11 coins/spin average, so 14 spins gross
    ~154 and cost 42. That clears night 1 and 2 comfortably and goes negative
    from night 3, which is where the charms are supposed to take over. */
@@ -62055,7 +62086,11 @@ const spinCost = (m) => Math.max(1, SPIN_COST - buff(m || myMachine, 'spinCost')
    because you cannot compound off charms you were never offered. 1.25 leaves
    room for the engine to spin up while still doubling roughly every three
    nights, so the pressure is real and the numbers still reach seven figures. */
-const roundQuota = n => Math.round(70 * Math.pow(1.25, n - 1));
+/* Cut with BASE_SPINS from 14 to 9. Fourteen pulls made a night drag and made
+   each one weightless; nine is a hand you can hold in your head. The quota base
+   drops by the same ratio (70 -> 45) so the difficulty curve lands exactly
+   where it did — the night is shorter, not easier. Growth rate is untouched. */
+const roundQuota = n => Math.round(45 * Math.pow(1.25, n - 1));
 /* each player owes their own share, so the dealer's total take scales with
    the number of people in the room */
 const playerCount = () => (net.connected ? net.peers.size + 1 : 1);
@@ -62066,7 +62101,7 @@ const myShare    = () => Math.ceil(nightTotal() / playerCount());
 const roundSpins = () => BASE_SPINS + buff(myMachine, 'extraSpins');
 
 const game = {
-  /* Starting float. SPIN_COST is 3 and a night is 14 spins, so a run needs 42
+  /* Starting float. SPIN_COST is 3 and a night is 9 spins, so a run needs 27
      coins just to be played to the end — starting at 0 meant you could not
      afford the first pull. 60 covers the full night with a little slack while
      still leaving night 1's quota of 70 as a real target you have to win. */
@@ -62274,6 +62309,26 @@ const CHARMS = [
   { id: 'avarice',   name: 'AVARICE',        kind: 'GREED', tier: 'II', cost: 178,
     desc: 'All wins +18% more. Dread rises faster still.',
     all: 0.18, dread: 0.45, needs: ['greedcut'] },
+
+  /* ---- CULL. The other half of the reel-weight lever. Every charm above ADDS
+     presence to a symbol; these take it away. Because a symbol's odds are its
+     share of the total weight, thinning the commons lifts everything else
+     without touching it — which is the only way to make the rare, high-paying
+     end of the board show up often enough to matter.
+
+     The trade is real. Candles and moths are what pay your small, steady wins,
+     so a run that culls them is betting the night on landing the top end and
+     starving if it doesn't. That is the decision these exist to create. ---- */
+  { id: 'snuffed',   name: 'SNUFFED',     kind: 'CULL', tier: 'I', cost: 84,
+    desc: 'Candles land far less often.', symWeight: { candle: -18 } },
+  { id: 'mothbane',  name: 'MOTHBANE',    kind: 'CULL', tier: 'I', cost: 92,
+    desc: 'Moths land far less often.', symWeight: { moth: -14 } },
+  { id: 'sweptclean', name: 'SWEPT CLEAN', kind: 'CULL', tier: 'II', cost: 175,
+    desc: 'Candles and moths grow scarcer still.',
+    symWeight: { candle: -10, moth: -8 }, needs: ['snuffed', 'mothbane'] },
+  { id: 'thintheherd', name: 'THIN THE HERD', kind: 'CULL', tier: 'II', cost: 190,
+    desc: 'Eyes and spiders land less often, and all wins +8%.',
+    symWeight: { eye: -8, spider: -4 }, all: 0.08, needs: ['snuffed'] },
 
   /* ---- FUSED. Two finished lines welded into one thing neither could do.
      These are the reason to go deep on a pair rather than wide on everything,
@@ -62572,8 +62627,8 @@ function resolveSpin(m) {
     game.lastWin = total;
     /* the marquee is the only readout you can see while seated, so a big one
        gets named rather than just counted */
-    if (big) paintTop('BIG WIN  +' + total, '#ffd24a', true);
-    else     paintTop('+' + total, '#ffffff', true);
+    if (big) paintTop('BIG WIN  +' + total, '#ffd24a', true, m, m.reels.winLabel);
+    else     paintTop('+' + total, '#ffffff', true, m, m.reels.winLabel);
     toast(names.slice(0, 2).join(' + ') + '  +' + total);
     AUDIO.win(total);
     horror.dread = Math.max(0, horror.dread - 0.06);   /* winning buys relief */
@@ -62851,7 +62906,7 @@ const _SYM_COLOR = {};
 for (const s of SYMBOLS) _SYM_COLOR[s.id] = parseInt(s.color.slice(1), 16);
 const _KIND_COLOR = { PAYOUT: 0xd8b070, PATTERN: 0x88b0d0, TEMPO: 0xc0c8a0,
                       NERVE: 0x9aa8b0, GREED: 0xe0b040, FUSED: 0xc890e8,
-                      LUCK: 0x7ed321, COMPOUND: 0xff7a3a };
+                      LUCK: 0x7ed321, COMPOUND: 0xff7a3a, CULL: 0x9a8fa4 };
 
 function proceduralFigure(g, c) {
   const symId = c.sym ? Object.keys(c.sym)[0] : null;
@@ -62973,6 +63028,7 @@ const _FX_KIND = {
   GREED:    { spin: 0.34, bob: 0.004, rate: 2.6, amp: 0.45, glow: 0.122, motes: 0 },
   COMPOUND: { spin: 0.42, bob: 0.006, rate: 3.0, amp: 0.55, glow: 0.135, motes: 1 },
   FUSED:    { spin: 0.30, bob: 0.009, rate: 1.7, amp: 0.55, glow: 0.155, motes: 3 },
+  CULL:     { spin: 0.10, bob: 0.003, rate: 0.9, amp: 0.22, glow: 0.070, motes: 0 },
 };
 const CHARM_FX = [];
 /* peak sprite opacity, and what a charm keeps burning through a power cut.
