@@ -60771,6 +60771,24 @@ const READOUT_W =  0.509 * H_MACH;
 const READOUT_H =  0.186 * H_MACH;
 const READOUT_RAKE = -0.070;
 
+/* The control deck carries two more blank plates, under the moulded words
+   ROUNDS and BET, either side of the eye button. These are the only numbers a
+   player checks mid-spin, so they get live canvases like the reels and marquee.
+
+   NOTE these two are PAINTED, not modelled — the plate outlines are texture,
+   and the deck behind them is one continuous sloping face with no step for a
+   depth probe to catch. Chasing them with the scanline trick found the raised
+   deck lip instead and put both readouts a step too low, sitting on the plinth.
+   They were read off an ortho front render with a world-coordinate grid drawn
+   over it, which is the right tool whenever a feature is paint rather than
+   geometry. The rake is real though — the deck face leans ~9.5deg. */
+const DECK_Y    = TABLE_H + 0.130 * H_MACH;
+const DECK_Z    =  0.197 * H_MACH;
+const DECK_H    =  0.042 * H_MACH;
+const DECK_RAKE = -0.165;
+const ROUNDS_X  = -0.200 * H_MACH, ROUNDS_W = 0.235 * H_MACH;
+const BET_X     =  0.175 * H_MACH, BET_W    = 0.195 * H_MACH;
+
 const FACE_Z    = 0.32 * H_MACH;             /* bbox front: lever + camera only */
 
 /* A shallow cylindrical arc for the reel face. The 5x3 canvas maps straight on
@@ -61051,6 +61069,26 @@ function buildMachine(idx) {
   topScreen.rotation.x = READOUT_RAKE;      /* shallower lean than the reel glass */
   g.add(topScreen);
   m.readoutPlane = topScreen;
+
+  /* ---- control deck: ROUNDS and BET, live on the cabinet's own plates.
+     Until now both numbers lived only in the HUD, which meant the moment you
+     sat down and filled the screen with the machine you could no longer see
+     how many pulls you had left or what one cost. The model moulds the labels
+     in, so these canvases carry the VALUES only. ---- */
+  m.deck = {};
+  [['rounds', ROUNDS_X, ROUNDS_W, 256], ['bet', BET_X, BET_W, 224]].forEach(([key, px_, pw, cw]) => {
+    const c = document.createElement('canvas');
+    c.width = cw; c.height = 32;
+    const tex = new THREE.CanvasTexture(c);
+    tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false; tex.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(pw * 0.94, DECK_H * 0.94),
+      new THREE.MeshBasicMaterial({ map: tex }));
+    mesh.position.set(px_, DECK_Y, DECK_Z + 0.004);
+    mesh.rotation.x = DECK_RAKE;
+    g.add(mesh);
+    m.deck[key] = { ctx: c.getContext('2d'), tex, w: cw };
+  });
 
   /* ---- bezel bulbs. The new cabinet paints its lamp sockets in a ring around
      the MARQUEE rather than down the reel window's flanks, so rather than a
@@ -61535,6 +61573,33 @@ function drawCoin(g, cx, cy, r, color) {
   g.globalCompositeOperation = 'destination-out';
   g.fillRect(cx - r * 0.30, cy - r * 0.30, r * 0.60, r * 0.60);
   g.restore();
+}
+
+/* ROUNDS / BET on the cabinet's control deck. Cheap enough to just redraw
+   both whenever anything touches spins or the spin price — which is exactly
+   what syncHUD() already gets called for. Rounds go amber when you are down to
+   your last two, because running out is what ends the night. */
+function paintDeck(m = myMachine) {
+  if (!m || !m.deck) return;
+  const left = roundSpins() - game.spins;      /* pips used, for the x/y read */
+  const draw = (d, text, color) => {
+    const g = d.ctx, W = d.w;
+    g.fillStyle = '#050203'; g.fillRect(0, 0, W, 32);
+    g.font = 'bold 22px "Arial Black", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.shadowColor = color; g.shadowBlur = 8;
+    g.fillStyle = color;
+    g.fillText(text, W / 2, 17);
+    g.shadowBlur = 0;
+    d.tex.needsUpdate = true;
+  };
+  const spins = Math.max(0, game.spins);
+  draw(m.deck.rounds, spins + ' / ' + roundSpins(),
+       spins === 0 ? '#ff3d3d' : spins <= 2 ? '#ffb524' : '#ffd66a');
+  /* green when a charm has actually knocked the price down, same tell the
+     wall boards use for a buffed number */
+  const cost = spinCost(m);
+  draw(m.deck.bet, String(cost), cost < SPIN_COST ? '#7ed321' : '#ffd66a');
 }
 
 function paintTop(text, color = '#ffffff', coin = false, m = myMachine) {
@@ -62307,6 +62372,9 @@ const el = {
 };
 
 function syncHUD() {
+  /* the cabinet's own ROUNDS/BET plates track the same state as the HUD, so
+     they ride along on every call rather than needing their own hooks */
+  for (const mm of MACHINES) paintDeck(mm);
   el.coins.textContent = game.coins.toLocaleString();
   el.clovers.textContent = game.clovers;
   el.round.textContent = game.round;
@@ -62494,12 +62562,18 @@ function resolveSpin(m) {
   m.reels.wins = wins;
   m.reels.winAmount = total;
   m.reels.winLabel = best ? best.name + ' x' + best.mult.toFixed(1) : '';
-  m.reels.flash = (total > 0 || cloversWon >= cloverNeed) ? 2.6 : 0;
+  /* a big win holds the strobe on twice as long, so the bulbs around the
+     marquee are still going when you look up from the reels */
+  const big = total >= spinCost(m) * 12;
+  m.reels.flash = (total > 0 || cloversWon >= cloverNeed) ? (big ? 5.0 : 2.6) : 0;
 
   if (total > 0) {
     game.coins += total;
     game.lastWin = total;
-    paintTop('+' + total, '#ffffff', true);
+    /* the marquee is the only readout you can see while seated, so a big one
+       gets named rather than just counted */
+    if (big) paintTop('BIG WIN  +' + total, '#ffd24a', true);
+    else     paintTop('+' + total, '#ffffff', true);
     toast(names.slice(0, 2).join(' + ') + '  +' + total);
     AUDIO.win(total);
     horror.dread = Math.max(0, horror.dread - 0.06);   /* winning buys relief */
