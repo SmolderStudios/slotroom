@@ -115,6 +115,10 @@
   .card.k-LUCK{border-color:#2a5a34}
   /* the scaling engine — brightest border, it should catch the eye */
   .card.k-COMPOUND{border-color:#c0761a;box-shadow:0 0 14px rgba(255,138,30,.18)}
+  .card.k-CULL{border-color:#4a4450}
+  /* the boon is the one card on the tray you cannot buy, so it gets to look it */
+  .card.k-RITE{border-color:#e0b02a;box-shadow:0 0 18px rgba(255,208,74,.24)}
+  .card.k-RITE:hover{border-color:#ffe066}
   .card.k-LUCK:hover,.card.k-COMPOUND:hover{border-color:#ff8a1e}
   .card.k-PAYOUT:hover,.card.k-PATTERN:hover,.card.k-TEMPO:hover,
   .card.k-NERVE:hover,.card.k-GREED:hover,.card.k-FUSED:hover{border-color:#ff8a1e}
@@ -62310,6 +62314,38 @@ const CHARMS = [
     desc: 'All wins +18% more. Dread rises faster still.',
     all: 0.18, dread: 0.45, needs: ['greedcut'] },
 
+  /* ---- RITE. The end-of-night boon, and the only thing here you cannot buy.
+     A charm is a part you bolt to a machine; a RITE is something the room does
+     to you once, for the rest of the run. They are strictly stronger than what
+     the shop sells because they are never for sale — the tribute at the door
+     always offers exactly one, so surviving a night is worth something on its
+     own rather than just resetting the counter.
+
+     `boon: true` is what keeps them out of the shop pool. Most stack up to
+     STACK_CAP so a long run can lean into one, and THE BARGAIN repeats without
+     limit because compounding is what lets a run outpace the quota. The shovel
+     part is deliberately NOT one of these: it is the escape, it is capped at
+     SHOVEL_PARTS, and it must never be stackable. ---- */
+  { id: 'rite_tithe',  name: 'THE TITHE',   kind: 'RITE', tier: '◆', cost: 0, boon: true,
+    desc: 'Start every night with 40 coins.', head: 40, stack: true },
+  { id: 'rite_long',   name: 'THE LONG NIGHT', kind: 'RITE', tier: '◆', cost: 0, boon: true,
+    desc: '+2 spins every night.', spins: 2, stack: true },
+  { id: 'rite_ledger', name: 'THE LEDGER',  kind: 'RITE', tier: '◆', cost: 0, boon: true,
+    desc: 'All wins +20%.', all: 0.20, stack: true },
+  { id: 'rite_bargain', name: 'THE BARGAIN', kind: 'RITE', tier: '∞', cost: 0, boon: true,
+    desc: 'All wins x1.25, and dread climbs. Offered again and again.',
+    mult: 1.25, dread: 0.15, repeat: true },
+  { id: 'rite_greenrot', name: 'GREEN ROT', kind: 'RITE', tier: '◆', cost: 0, boon: true,
+    desc: 'Clovers crowd the reels.', cloverWeight: 6, stack: true },
+  { id: 'rite_still',  name: 'STILLNESS',   kind: 'RITE', tier: '◆', cost: 0, boon: true,
+    desc: 'Dread rises 30% slower, and +10s before it breaks in.',
+    dread: -0.30, timer: 10, stack: true },
+  { id: 'rite_famine', name: 'FAMINE',      kind: 'RITE', tier: '◆', cost: 0, boon: true,
+    desc: 'Candles and moths grow scarcer for the rest of the run.',
+    symWeight: { candle: -12, moth: -10 }, stack: true },
+  { id: 'rite_cheap',  name: 'CHEAP SEAT',  kind: 'RITE', tier: '◆', cost: 0, boon: true,
+    desc: 'Spins cost 1 less.', spinCost: 1 },
+
   /* ---- CULL. The other half of the reel-weight lever. Every charm above ADDS
      presence to a symbol; these take it away. Because a symbol's odds are its
      share of the total weight, thinning the commons lifts everything else
@@ -62404,7 +62440,11 @@ function charmAvailable(c) {
   if (c.needs && !c.needs.every(hasCharm)) return false;
   return true;
 }
-const charmPool = () => CHARMS.filter(charmAvailable);
+/* Two pools off one gate. The shop never stocks a RITE — they are the reward
+   for getting through a night, and putting a price on one would turn it into
+   just another charm. */
+const charmPool  = () => CHARMS.filter(c => !c.boon && charmAvailable(c));
+const boonPool   = () => CHARMS.filter(c =>  c.boon && charmAvailable(c));
 
 const el = {
   coins: document.getElementById('coins'),
@@ -62906,7 +62946,8 @@ const _SYM_COLOR = {};
 for (const s of SYMBOLS) _SYM_COLOR[s.id] = parseInt(s.color.slice(1), 16);
 const _KIND_COLOR = { PAYOUT: 0xd8b070, PATTERN: 0x88b0d0, TEMPO: 0xc0c8a0,
                       NERVE: 0x9aa8b0, GREED: 0xe0b040, FUSED: 0xc890e8,
-                      LUCK: 0x7ed321, COMPOUND: 0xff7a3a, CULL: 0x9a8fa4 };
+                      LUCK: 0x7ed321, COMPOUND: 0xff7a3a, CULL: 0x9a8fa4,
+                      RITE: 0xffe066 };
 
 function proceduralFigure(g, c) {
   const symId = c.sym ? Object.keys(c.sym)[0] : null;
@@ -63029,6 +63070,7 @@ const _FX_KIND = {
   COMPOUND: { spin: 0.42, bob: 0.006, rate: 3.0, amp: 0.55, glow: 0.135, motes: 1 },
   FUSED:    { spin: 0.30, bob: 0.009, rate: 1.7, amp: 0.55, glow: 0.155, motes: 3 },
   CULL:     { spin: 0.10, bob: 0.003, rate: 0.9, amp: 0.22, glow: 0.070, motes: 0 },
+  RITE:     { spin: 0.24, bob: 0.010, rate: 1.4, amp: 0.60, glow: 0.150, motes: 2 },
 };
 const CHARM_FX = [];
 /* peak sprite opacity, and what a charm keeps burning through a power cut.
@@ -63245,10 +63287,13 @@ function offerFreeCharm() {
   /* while you still need shovel parts, the salesman also slips one onto the tray —
      take the part and forgo the charm, or take the charm and stay chained longer */
   const needParts = myMachine && !game.builtShovel && game.parts < SHOVEL_PARTS;
-  if ((!pool.length && !needParts) || !myMachine) { advanceAfterTribute(); return; }
+  if ((!pool.length && !needParts && !boonPool().length) || !myMachine) { advanceAfterTribute(); return; }
 
   const cards = [];
   if (needParts) cards.push({ part: true });
+  /* one boon, always, ahead of the charms — this is the night's actual reward */
+  const boons = boonPool();
+  if (boons.length) cards.push({ charm: boons[(Math.random() * boons.length) | 0] });
   /* Four on the tray, not three, and deliberately spread across kinds so the
      offer is a CHOICE rather than three flavours of the same idea — with the
      list this long, an unweighted draw kept handing over three symbol charms. */
@@ -63256,12 +63301,13 @@ function offerFreeCharm() {
   const byKind = {};
   for (const c of pool) (byKind[c.kind] = byKind[c.kind] || []).push(c);
   const kinds = Object.keys(byKind).sort(() => Math.random() - 0.5);
+  const ROOM = cards.length > (needParts ? 1 : 0) ? 3 : 4;   /* the boon took a slot */
   for (const k of kinds) {
-    if (pick.length >= 4) break;
+    if (pick.length >= ROOM) break;
     const bucket = byKind[k];
     pick.push(bucket[(Math.random() * bucket.length) | 0]);
   }
-  while (pick.length < Math.min(4, pool.length)) {
+  while (pick.length < Math.min(ROOM, pool.length)) {
     const c = pool[(Math.random() * pool.length) | 0];
     if (!pick.includes(c)) pick.push(c);
   }
@@ -66733,7 +66779,7 @@ function boot() {
                  enterFocus, exitFocus, showWatcher, sendHallWalker, triggerBlackout,
                  cutPower, setPower, doorBang, windowKnock, escalate, jumpScare,
                  settleRound, resetRun, roundQuota, roundSpins, breakIn,
-                 beginOffer, refreshBoards, charmCost, buffMult, charmCount, offerFreeCharm, charmPool, spinCost, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
+                 beginOffer, refreshBoards, charmCost, buffMult, charmCount, offerFreeCharm, charmPool, boonPool, spinCost, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
                  buildSkinnedFigure, figureSkin,
                  loadModel, spawnModel, psxifyModel, MODELS, offerFreeCharm, advanceAfterTribute, nearStairs, fundStairs, stairsBuilt,
