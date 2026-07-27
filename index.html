@@ -113,7 +113,9 @@
   .card.k-GREED{border-color:#6a5a1a}
   .card.k-FUSED{border-color:#5a3a6a}
   .card.k-LUCK{border-color:#2a5a34}
-  .card.k-LUCK:hover{border-color:#ff8a1e}
+  /* the scaling engine — brightest border, it should catch the eye */
+  .card.k-COMPOUND{border-color:#c0761a;box-shadow:0 0 14px rgba(255,138,30,.18)}
+  .card.k-LUCK:hover,.card.k-COMPOUND:hover{border-color:#ff8a1e}
   .card.k-PAYOUT:hover,.card.k-PATTERN:hover,.card.k-TEMPO:hover,
   .card.k-NERVE:hover,.card.k-GREED:hover,.card.k-FUSED:hover{border-color:#ff8a1e}
 
@@ -60809,6 +60811,27 @@ const FOCUS_YAW   = 0;
 const FOCUS_PITCH = -0.17;
 
 /* charms are placed ON a machine, so effects are read per machine */
+/* Multiplicative all-wins multiplier from COMPOUND charms. Kept out of buff()
+   because that function SUMS, and the whole point of these is that they
+   multiply — folding them into the additive pile would flatten the curve back
+   into the one that could not keep up with the quota. */
+function buffMult(m) {
+  let v = 1;
+  if (!m) return 1;
+  for (const id of m.charms) {
+    const c = charmById(id);
+    if (c && c.mult) v *= c.mult;
+  }
+  return v;
+}
+/* What the NEXT copy of a charm costs. Repeatable charms get more expensive
+   each time, which is what stops one purchase a night from being automatic. */
+function charmCost(c) {
+  if (!c) return 0;
+  if (!c.costGrow) return c.cost;
+  return Math.round(c.cost * Math.pow(c.costGrow, charmCount(c.id)));
+}
+
 function buff(m, field, key) {
   let v = 0;
   if (!m) return 0;
@@ -61894,7 +61917,12 @@ const SPIN_COST = 3;
 /* SHORT CHANGE knocks coins off, but a spin is never free — at zero the whole
    quota loop stops meaning anything. */
 const spinCost = (m) => Math.max(1, SPIN_COST - buff(m || myMachine, 'spinCost'));
-const roundQuota = n => Math.round(70 * Math.pow(1.30, n - 1));
+/* 1.25, down from 1.30. At 1.30 the quota outran what a four-card shop could
+   actually sell you — a simulated run buying optimally still died on night 6,
+   because you cannot compound off charms you were never offered. 1.25 leaves
+   room for the engine to spin up while still doubling roughly every three
+   nights, so the pressure is real and the numbers still reach seven figures. */
+const roundQuota = n => Math.round(70 * Math.pow(1.25, n - 1));
 /* each player owes their own share, so the dealer's total take scales with
    the number of people in the room */
 const playerCount = () => (net.connected ? net.peers.size + 1 : 1);
@@ -62090,6 +62118,23 @@ const CHARMS = [
   { id: 'stalltime', name: 'STALLING',       kind: 'NERVE', tier: 'I', cost: 66,
     desc: '+8 seconds before it breaks the door.', timer: 8, stack: true },
 
+  /* ---- COMPOUND. The scaling engine, and the reason a run can go long.
+     Everything else here is a ONE-TIME ADDITIVE boost, and the quota is
+     exponential (x1.30 a night) — additive income cannot race an exponential,
+     so every run used to die around night 4 with a hard ceiling near 34k a
+     night against a night-30 quota of 141k. These are repeatable and
+     MULTIPLICATIVE: each copy multiplies every win, and each copy costs more
+     than the last. Buy rate is the whole game — 1.35x income against a 1.30x
+     quota means one purchase a night pulls slowly ahead, two runs away with
+     it, none and the room takes you. `repeat` = no stack cap, `costGrow` =
+     what the next copy costs. ---- */
+  { id: 'houserake', name: "THE HOUSE'S CUT", kind: 'COMPOUND', tier: '∞', cost: 70,
+    desc: 'All wins x1.30. Buy it again and again — each costs more.',
+    mult: 1.30, repeat: true, costGrow: 1.38 },
+  { id: 'deadmanshand', name: "DEAD MAN'S HAND", kind: 'COMPOUND', tier: '∞', cost: 260,
+    desc: 'All wins x1.45, and dread climbs. Repeatable.',
+    mult: 1.45, dread: 0.20, repeat: true, costGrow: 1.52, needs: ['houserake'] },
+
   /* ---- GREED. Flat multipliers on everything, paid for in dread. ---- */
   { id: 'greedcut',  name: 'GREED',          kind: 'GREED', tier: 'I', cost: 90,
     desc: 'All wins +12%. Dread rises faster.', all: 0.12, dread: 0.35 },
@@ -62165,7 +62210,9 @@ function charmCount(id) {
 const STACK_CAP = 3;
 function charmAvailable(c) {
   if (!c) return false;
-  if (c.stack ? charmCount(c.id) >= STACK_CAP : hasCharm(c.id)) return false;
+  /* `repeat` charms never leave the pool — they are the run's scaling engine
+     and the escalating price is what limits them, not a stack cap. */
+  if (!c.repeat && (c.stack ? charmCount(c.id) >= STACK_CAP : hasCharm(c.id))) return false;
   if (c.needs && !c.needs.every(hasCharm)) return false;
   return true;
 }
@@ -62331,7 +62378,8 @@ function resolveSpin(m) {
   const wild = buff(m, 'wild');
   /* LUCK charms fold into the same all-wins multiplier, so a clover hoard is
      worth something on every line rather than sitting unspent as reroll fuel */
-  const allBonus = 1 + buff(m, 'all') + buff(m, 'perClover');
+  /* additive charms raise the base, COMPOUND charms multiply the lot */
+  const allBonus = (1 + buff(m, 'all') + buff(m, 'perClover')) * buffMult(m);
 
   for (const p of PATTERNS) {
     const mult = p.mult + buff(m, 'pat', p.id);
@@ -62469,6 +62517,13 @@ function openShop() {
   /* clovers are luck: each one nudges the tray toward the rarer figures */
   const luck = Math.min(0.5, game.clovers * 0.02);
   const picks = [];
+  /* ALWAYS stock the scaling engine. The quota is exponential, so a run lives
+     or dies on compounding — and leaving that to a random four-card draw meant
+     a simulated run playing perfectly still starved out around night 6, having
+     simply never been offered the thing it needed. One guaranteed slot keeps
+     the path open; the escalating price is what keeps it honest. */
+  const comp = pool.filter(c => c.kind === 'COMPOUND');
+  if (comp.length) picks.push(comp[(Math.random() * comp.length) | 0]);
   while (picks.length < Math.min(4, pool.length)) {
     const weighted = pool.filter(c =>
       !picks.includes(c) && (c.kind !== 'RARE' || Math.random() < 0.25 + luck));
@@ -62732,7 +62787,7 @@ function priceTag(c) {
     g.font = '900 27px "Arial Black", sans-serif';
     g.fillStyle = '#ffffff';
     g.textAlign = 'left';
-    g.fillText(String(c.cost), 72, 61);
+    g.fillText(String(charmCost(c)), 72, 61);
   }, { smooth: true });
 }
 
@@ -62754,11 +62809,12 @@ function aimedShopItem() {
 function buyAimed() {
   const it = aimedShopItem();
   if (!it) return;
-  if (game.coins < it.charm.cost) {
+  const price = charmCost(it.charm);
+  if (game.coins < price) {
     toast('CANNOT AFFORD ' + it.charm.name, 1800); AUDIO.lose(); return;
   }
   if (player.carrying) { toast('HANDS FULL — PLACE IT FIRST', 1800); return; }
-  game.coins -= it.charm.cost;
+  game.coins -= price;
   it.sold = true;
   shop.group.remove(it.mesh);
   shop.group.remove(it.tag);
@@ -66223,9 +66279,9 @@ function updatePrompt() {
        a weak buy — the ladder is invisible otherwise */
     const nxt = CHARMS.find(x => x.needs && x.needs.includes(c.id));
     el.iiDesc.textContent = c.desc + (nxt ? '   → unlocks ' + nxt.name : '');
-    el.iiCost.textContent = c.cost;
+    el.iiCost.textContent = charmCost(c);
   }
-  if (looked) el.itemInfo.classList.toggle('poor', game.coins < looked.charm.cost);
+  if (looked) el.itemInfo.classList.toggle('poor', game.coins < charmCost(looked.charm));
   if (!looked) el.itemShown = null;
 }
 
@@ -66323,7 +66379,7 @@ function boot() {
                  enterFocus, exitFocus, showWatcher, sendHallWalker, triggerBlackout,
                  cutPower, setPower, doorBang, windowKnock, escalate, jumpScare,
                  settleRound, resetRun, roundQuota, roundSpins, breakIn,
-                 beginOffer, refreshBoards, offerFreeCharm, charmPool, spinCost, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
+                 beginOffer, refreshBoards, charmCost, buffMult, charmCount, offerFreeCharm, charmPool, spinCost, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
                  buildSkinnedFigure, figureSkin,
                  loadModel, spawnModel, psxifyModel, MODELS, offerFreeCharm, advanceAfterTribute, nearStairs, fundStairs, stairsBuilt,
