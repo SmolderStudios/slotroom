@@ -112,6 +112,8 @@
   .card.k-NERVE{border-color:#43505a}
   .card.k-GREED{border-color:#6a5a1a}
   .card.k-FUSED{border-color:#5a3a6a}
+  .card.k-LUCK{border-color:#2a5a34}
+  .card.k-LUCK:hover{border-color:#ff8a1e}
   .card.k-PAYOUT:hover,.card.k-PATTERN:hover,.card.k-TEMPO:hover,
   .card.k-NERVE:hover,.card.k-GREED:hover,.card.k-FUSED:hover{border-color:#ff8a1e}
 
@@ -232,7 +234,8 @@
 <!-- upgrade picker, handed through the door slot -->
 <div id="offer" class="ov hide">
   <h2>IT OFFERS YOU SOMETHING</h2>
-  <p class="sub">A tray slides through the slot in the door.<br>Take one. It is not asking.</p>
+  <p class="sub">A tray slides through the slot in the door.<br>Take one. It is not asking.
+    <br><span style="color:#7ed321;font-size:12px;letter-spacing:1px">[ R ] SPEND A CLOVER FOR A NEW HAND</span></p>
   <div class="cards" id="offerCards"></div>
 </div>
 
@@ -59885,6 +59888,13 @@ function streaks(g, w, h, count, alpha) {
 
 const TEX = {};
 
+/* The two wall boards are redrawn whenever your charms change, so the numbers
+   on the wall are the numbers you are actually playing — a paytable that still
+   claims skulls pay 110 after you have bought two tiers of skull charms is
+   worse than no paytable. Held here so refreshBoards() can re-run them. */
+let drawPatternBoard = null, drawSymbolBoard = null;
+const BOARD_TEX = { symbols: null, patterns: null };
+
 function buildTextures() {
   /* --- damp concrete wall --- */
   TEX.wall = makeTex(64, 64, (g, w, h) => {
@@ -60063,7 +60073,7 @@ function buildTextures() {
   /* The pattern board: every payline shape with its multiplier, laid out as
      a table with a mini 5x3 grid per row so you can read the shape at a
      glance. Uses PATTERNS directly, so adding a payline updates the wall. */
-  TEX.patterns = makeTex(560, 760, (g, w, h) => {
+  drawPatternBoard = (g, w, h) => {
     g.fillStyle = '#0b0708'; g.fillRect(0, 0, w, h);
 
     const HDR = 62, ROW = (h - HDR - 16) / PATTERNS.length;
@@ -60096,9 +60106,12 @@ function buildTextures() {
       g.fillStyle = '#ffc65a';
       g.fillText(p.id, gx + 5 * (D + GAP) + 24, y + ROW / 2 + 2);
 
+      /* live multiplier — pattern charms add straight onto this */
+      const _pm = (typeof myMachine !== 'undefined' && myMachine)
+                ? p.mult + buff(myMachine, 'pat', p.id) : p.mult;
       g.font = '900 34px "Arial Black", sans-serif';
-      g.fillStyle = '#ffffff';
-      g.fillText('x' + p.mult.toFixed(1), 8 + SPLIT + 34, y + ROW / 2 + 2);
+      g.fillStyle = _pm > p.mult ? '#7ed321' : '#ffffff';
+      g.fillText('x' + _pm.toFixed(1), 8 + SPLIT + 34, y + ROW / 2 + 2);
 
       g.strokeStyle = 'rgba(198,34,30,.9)'; g.lineWidth = 3;
       g.beginPath(); g.moveTo(8, y); g.lineTo(w - 8, y); g.stroke();
@@ -60108,10 +60121,10 @@ function buildTextures() {
     g.beginPath();
     g.moveTo(8 + SPLIT, 8 + HDR); g.lineTo(8 + SPLIT, h - 8); g.stroke();
     g.strokeRect(8, 8, w - 16, h - 16);
-  }, { smooth: true });
+  };
 
   /* --- companion board: what each symbol pays, and how often it shows up --- */
-  TEX.symbols = makeTex(560, 760, (g, w, h) => {
+  drawSymbolBoard = (g, w, h) => {
     g.fillStyle = '#0b0708'; g.fillRect(0, 0, w, h);
 
     const HDR = 62, ROW = (h - HDR - 16) / SYMBOLS.length;
@@ -60125,7 +60138,14 @@ function buildTextures() {
     g.fillText('PAYS', 8 + C1 + 60, 8 + HDR / 2);
     g.fillText('CHANCE', 8 + C2 + 58, 8 + HDR / 2);
 
-    const total = SYMBOLS.reduce((s, x) => s + x.w, 0);
+    /* LIVE numbers: pay and chance both read through the fitted charms, so the
+       board tracks the run instead of describing a machine you stopped playing
+       several purchases ago. Buffed rows are tinted so you can see at a glance
+       what your charms have actually changed. */
+    const _m = (typeof myMachine !== 'undefined') ? myMachine : null;
+    const _sw = s => (_m ? buff(_m, 'symWeight', s.id) : 0)
+                   + (_m && s.id === 'clover' ? buff(_m, 'cloverWeight') : 0);
+    const total = SYMBOLS.reduce((s, x) => s + x.w + _sw(x), 0);
     [...SYMBOLS].sort((a, b) => b.pay - a.pay).forEach((sym, i) => {
       const y = 8 + HDR + i * ROW;
       g.fillStyle = i % 2 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.32)';
@@ -60138,14 +60158,19 @@ function buildTextures() {
       g.fillStyle = '#ffc65a';
       g.fillText(sym.id.toUpperCase(), 108, y + ROW / 2 + 2);
 
+      const symUp = _m ? buff(_m, 'sym', sym.id) : 0;
+      const allUp = _m ? buff(_m, 'all') : 0;
+      const pay = Math.round(sym.pay * (1 + symUp) * (1 + allUp));
+      const chance = ((sym.w + _sw(sym)) / total) * 100;
+
       g.textAlign = 'center';
       g.font = '900 32px "Arial Black", sans-serif';
-      g.fillStyle = '#ffffff';
-      g.fillText(String(sym.pay), 8 + C1 + 60, y + ROW / 2 + 2);
+      g.fillStyle = pay > sym.pay ? '#7ed321' : '#ffffff';
+      g.fillText(String(pay), 8 + C1 + 60, y + ROW / 2 + 2);
 
       g.font = '900 26px "Arial Black", sans-serif';
-      g.fillStyle = '#9fd86a';
-      g.fillText(((sym.w / total) * 100).toFixed(0) + '%', 8 + C2 + 58, y + ROW / 2 + 2);
+      g.fillStyle = _sw(sym) > 0 ? '#7ed321' : '#9fd86a';
+      g.fillText(chance.toFixed(chance < 10 ? 1 : 0) + '%', 8 + C2 + 58, y + ROW / 2 + 2);
 
       g.strokeStyle = 'rgba(198,34,30,.9)'; g.lineWidth = 3;
       g.beginPath(); g.moveTo(8, y); g.lineTo(w - 8, y); g.stroke();
@@ -60156,7 +60181,7 @@ function buildTextures() {
       g.beginPath(); g.moveTo(8 + x, 8 + HDR); g.lineTo(8 + x, h - 8); g.stroke();
     });
     g.strokeRect(8, 8, w - 16, h - 16);
-  }, { smooth: true });
+  };
 
   /* A face for the window. Mostly implied — sunken sockets and a pale mass,
      no detail. Detail would make it a character; vagueness keeps it a threat. */
@@ -60258,6 +60283,23 @@ function buildTextures() {
     }
     speckle(g, w, h, 26, true, false);
   }, { repeat: [3, 1] });
+
+  /* first draw of the two boards, from the base numbers */
+  TEX.patterns = BOARD_TEX.patterns = makeTex(560, 760, drawPatternBoard, { smooth: true });
+  TEX.symbols  = BOARD_TEX.symbols  = makeTex(560, 760, drawSymbolBoard,  { smooth: true });
+}
+
+/* Redraw both boards against the charms currently fitted. Called after every
+   charm change; cheap enough (two 560x760 canvases) that it does not need to
+   be smarter than "just do it again". */
+function refreshBoards() {
+  if (!drawSymbolBoard || !BOARD_TEX.symbols) return;
+  for (const [key, draw] of [['symbols', drawSymbolBoard], ['patterns', drawPatternBoard]]) {
+    const t = BOARD_TEX[key];
+    const c = t.image;
+    draw(c.getContext('2d'), c.width, c.height);
+    t.needsUpdate = true;
+  }
 }
 
 /* ---------------------------------------------------------------- [S-03]
@@ -60781,6 +60823,13 @@ function buff(m, field, key) {
     else if (field === 'head')  v += c.head || 0;
     else if (field === 'cloverWeight') v += c.cloverWeight || 0;
     else if (field === 'symWeight') v += (c.symWeight && c.symWeight[key]) || 0;
+    else if (field === 'cloverCoins') v += c.cloverCoins || 0;
+    else if (field === 'cloverFloor') v += c.cloverFloor || 0;
+    /* each LUCK charm contributes rate x clovers, capped per charm so a big
+       hoard cannot run away with the run */
+    else if (field === 'perClover') {
+      if (c.perClover) v += Math.min(c.perCloverMax || 99, c.perClover * (game.clovers || 0));
+    }
     /* stackable charms appear in m.charms once per copy, so these just add up */
     else if (field === 'spinCost') v += c.spinCost || 0;
     else if (field === 'timer')  v += c.timer || 0;
@@ -61508,6 +61557,12 @@ addEventListener('keydown', e => {
      handled BEFORE the ui.blocking gate for that reason, and they swallow
      their key so letters the game also binds (N, C, P) don't double-fire. */
   if (dev.open && devKey(e)) { e.preventDefault(); return; }
+  /* R also rerolls the free-charm hand, and that overlay sets ui.blocking — so
+     it has to be answered before the gate or the reroll is unreachable exactly
+     where you most want it. */
+  if (e.code === 'KeyR' && !document.getElementById('offer').classList.contains('hide')) {
+    rerollShop(); return;
+  }
   if (ui.blocking) return;
   keys[e.code] = true;
   if (e.code === 'KeyE') interact();
@@ -62009,6 +62064,22 @@ const CHARMS = [
   { id: 'gleaner',   name: 'GLEANER',        kind: 'TEMPO', tier: 'I', cost: 70,
     desc: '+1 clover every night.', clovers: 1, stack: true },
 
+  /* ---- LUCK. Clovers used to be a reroll token and nothing else — you sat on
+     a pile of them with no reason to want more, and the "each clover nudges the
+     tray toward rares" effect was invisible so it may as well not have existed.
+     These make a held clover worth something on every single spin, which turns
+     the pile into a resource you actually weigh spending. ---- */
+  { id: 'foundluck', name: 'FOUND LUCK',     kind: 'LUCK', tier: 'I', cost: 74,
+    desc: 'All wins +1% for each clover you hold (max +15%).', perClover: 0.01, perCloverMax: 0.15 },
+  { id: 'greenfingers', name: 'GREEN FINGERS', kind: 'LUCK', tier: 'II', cost: 142,
+    desc: 'A further +1.5% per clover (max +30% total).',
+    perClover: 0.015, perCloverMax: 0.15, needs: ['foundluck'] },
+  { id: 'cloverbank', name: 'CLOVER BANK',   kind: 'LUCK', tier: 'I', cost: 86,
+    desc: 'Each night, gain 3 coins per clover held.', cloverCoins: 3 },
+  { id: 'fourleaf',  name: 'FOUR-LEAF EYE',  kind: 'LUCK', tier: 'II', cost: 120,
+    desc: 'Clovers land more often, and pay out from 2 on the grid.',
+    cloverWeight: 4, cloverFloor: 1 },
+
   /* ---- NERVE. Keeping the room off your back. ---- */
   { id: 'ironnerve', name: 'IRON NERVE',     kind: 'NERVE', tier: 'I', cost: 58,
     desc: 'Dread rises 25% slower.', dread: -0.25 },
@@ -62258,7 +62329,9 @@ function resolveSpin(m) {
   let best = null;
 
   const wild = buff(m, 'wild');
-  const allBonus = 1 + buff(m, 'all');
+  /* LUCK charms fold into the same all-wins multiplier, so a clover hoard is
+     worth something on every line rather than sitting unspent as reroll fuel */
+  const allBonus = 1 + buff(m, 'all') + buff(m, 'perClover');
 
   for (const p of PATTERNS) {
     const mult = p.mult + buff(m, 'pat', p.id);
@@ -62291,7 +62364,9 @@ function resolveSpin(m) {
   for (let r = 0; r < 3; r++)
     for (let c = 0; c < 5; c++)
       if (grid[r][c].id === 'clover') cloversWon++;
-  if (cloversWon >= 3) {
+  /* FOUR-LEAF EYE drops the threshold from three clovers to two */
+  const cloverNeed = 3 - buff(m, 'cloverFloor');
+  if (cloversWon >= cloverNeed) {
     game.clovers += cloversWon;
     for (let r = 0; r < 3; r++)
       for (let c = 0; c < 5; c++)
@@ -62303,7 +62378,7 @@ function resolveSpin(m) {
   m.reels.wins = wins;
   m.reels.winAmount = total;
   m.reels.winLabel = best ? best.name + ' x' + best.mult.toFixed(1) : '';
-  m.reels.flash = (total > 0 || cloversWon >= 3) ? 2.6 : 0;
+  m.reels.flash = (total > 0 || cloversWon >= cloverNeed) ? 2.6 : 0;
 
   if (total > 0) {
     game.coins += total;
@@ -62312,7 +62387,7 @@ function resolveSpin(m) {
     toast(names.slice(0, 2).join(' + ') + '  +' + total);
     AUDIO.win(total);
     horror.dread = Math.max(0, horror.dread - 0.06);   /* winning buys relief */
-  } else if (cloversWon >= 3) {
+  } else if (cloversWon >= cloverNeed) {
     paintTop('+' + cloversWon + ' CLOVER', '#7ed321');
     toast('+' + cloversWon + ' CLOVER');
     AUDIO.win(20);
@@ -62698,6 +62773,7 @@ function buyAimed() {
   } else {
     myMachine.charms.push(it.charm.id);
     spawnCharmToken(myMachine, it.charm.id, myMachine.charms.length - 1);
+    refreshBoards();
     toast(it.charm.name + ' — FITTED', 2200);
   }
   syncHUD();
@@ -62726,13 +62802,19 @@ function placeCarried() {
   player.carrying = null;
   AUDIO.win(90);
   toast(c.name + ' PLACED', 2000);
+  refreshBoards();
   syncHUD();
 }
 
-/* clovers buy a fresh tray */
+/* Clovers buy a fresh tray — and now a fresh hand of free-charm cards too. The
+   offer used to be take-it-or-leave-it, which is where a clover hoard went to
+   die: nothing to spend it on between shops. */
 function rerollShop() {
-  if (!shop.open || game.clovers < 1) { AUDIO.lose(); return; }
+  if (game.clovers < 1) { AUDIO.lose(); return; }
+  const offerUp = !document.getElementById('offer').classList.contains('hide');
+  if (!shop.open && !offerUp) { AUDIO.lose(); return; }
   game.clovers--;
+  if (offerUp) { offerFreeCharm(); toast('OFFER REROLLED', 1600); syncHUD(); return; }
   openShop();
   toast('TRAY REROLLED', 1600);
   syncHUD();
@@ -62806,6 +62888,7 @@ function offerFreeCharm() {
       el.addEventListener('click', () => {
         myMachine.charms.push(c.id);
         spawnCharmToken(myMachine, c.id, myMachine.charms.length - 1);
+        refreshBoards();
         AUDIO.win(140);
         toast(c.name + ' — ON THE HOUSE', 2400);
         hideOverlay('offer');
@@ -62847,6 +62930,7 @@ function nextNight() {
   game.spins = roundSpins();
   game.coins += buff(myMachine, 'head');            /* DEEP POCKETS */
   game.clovers += buff(myMachine, 'clovers');       /* GLEANER */
+  game.coins   += buff(myMachine, 'cloverCoins') * game.clovers;   /* CLOVER BANK */
   horror.dread = Math.min(1, horror.dread + 0.08);
   paintTop('NIGHT ' + game.round, '#ffb524');
   toast('NIGHT ' + game.round, 2000);
@@ -66239,7 +66323,7 @@ function boot() {
                  enterFocus, exitFocus, showWatcher, sendHallWalker, triggerBlackout,
                  cutPower, setPower, doorBang, windowKnock, escalate, jumpScare,
                  settleRound, resetRun, roundQuota, roundSpins, breakIn,
-                 beginOffer, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
+                 beginOffer, refreshBoards, offerFreeCharm, charmPool, spinCost, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
                  buildSkinnedFigure, figureSkin,
                  loadModel, spawnModel, psxifyModel, MODELS, offerFreeCharm, advanceAfterTribute, nearStairs, fundStairs, stairsBuilt,
