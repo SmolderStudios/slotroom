@@ -61529,6 +61529,21 @@ function devKey(e) {
     case 'KeyH':                                   /* hide the room to see a model clean */
       dev.hideRoom = !dev.hideRoom;
       devApplyHideRoom(); break;
+    case 'KeyO':                                   /* force the night to end — collector comes */
+      if (game.offering) {
+        /* second press sends it home again, so you can watch the walk both ways */
+        game.offering = false; game.paid = false; game.collectT = 0;
+        toast('COLLECTOR DISMISSED', 900);
+      } else {
+        beginOffer();
+      }
+      break;
+    case 'KeyK':                                   /* skip it straight to the door */
+      if (horror.collector && horror.collectorDoor) {
+        horror.collector.position.copy(horror.collectorDoor);
+        toast('COLLECTOR AT DOOR', 800);
+      }
+      break;
     case 'Minus':  dev.speed = Math.max(1, +(dev.speed - 1).toFixed(1)); break;
     case 'Equal':  dev.speed = Math.min(20, +(dev.speed + 1).toFixed(1)); break;
     default: return false;                         /* not ours — let the game have it */
@@ -61570,6 +61585,7 @@ function devRender() {
   let s = '<b>── DEV TOOLS (F1) ─────────</b>\n';
   s += 'N  noclip      ' + on(dev.noclip) + '   -/+ speed ' + dev.speed.toFixed(0) + '\n';
   s += 'H  hide room   ' + on(dev.hideRoom) + '\n';
+  s += 'O  end round   ' + on(!!game.offering) + '   K  snap to door\n';
   s += 'P  pause anim  ' + on(dev.slowmo === 0) + '   ,/. rate ' + dev.slowmo.toFixed(2) + '\n';
   s += '<b>── MODEL ──────────────────</b>\n';
   if (!M) {
@@ -63029,6 +63045,9 @@ function buildHorror() {
   });
   horror.collectorSeat = new THREE.Vector3(seatX, 0, seatZ - 0.04);
   horror.collectorDoor = new THREE.Vector3(DOOR_AT.x, 0, hz0 + 0.62);
+  /* Where it waits when it wants nothing: past the end of the corridor and off
+     to one side, hidden. It only exists out there when it is coming for you. */
+  horror.collectorHome = new THREE.Vector3(seatX + 0.55, 0, hz0 + HLEN + 1.4);
 
   /* the anchor the walking figure rides; the model is hung on it in wireModels */
   const hf = new THREE.Group();
@@ -65017,6 +65036,12 @@ function psxifyModel(root, opts = {}) {
   const tint = opts.tint === undefined ? null : opts.tint;
   root.traverse(o => {
     if (!o.isMesh && !o.isSkinnedMesh) return;
+    /* Lambert shades from vertex normals, so a mesh exported without them
+       renders pure black no matter how well lit the room is — which is exactly
+       what the rigged collector did. Rebuild them when they're absent. On a
+       skinned mesh this runs on the bind pose, which is correct: the shader
+       skins the normals afterwards. */
+    if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
     const src = Array.isArray(o.material) ? o.material : [o.material];
     const out = src.map(m => {
       if (!m) return m;
@@ -65224,8 +65249,9 @@ function wireModels() {
        with you and made the tray at the door come from nowhere. It now waits
        OUT in the corridor, sat in its chair where you can see it through the
        barred window, and only comes to the door when the debt falls due. */
-    const seat = horror.collectorSeat || new THREE.Vector3(-0.29, 0, 6.2);
-    const h = placeModel('collector', { pos: seat.clone(), height: 1.95, rotationY: 0.16, animate: true });
+    /* starts at its hiding place, not the chair — see updateCollectorWalk */
+    const start = horror.collectorHome || horror.collectorSeat || new THREE.Vector3(-0.29, 0, 6.2);
+    const h = placeModel('collector', { pos: start.clone(), height: 1.95, rotationY: 0.16, animate: true });
     if (h) {
       const rigged = !!h.userData.mixer;
       /* A rigged model animates its own limbs, so the old stopgaps have to go:
@@ -65243,35 +65269,20 @@ function wireModels() {
           o.material.needsUpdate = true;
         }
       });
+      h.visible = false;                 /* out of sight until it wants paying */
       horror.collector = h;
-      horror.collectorSeated = 1;        /* 1 = sat down, 0 = on its feet */
+      horror.collectorSeated = 1;        /* legacy flag; the walk no longer sinks it */
       devRegister('collector', h);
     }
   }
   /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
      cabinet, and dress the station with its charm cabinet + locked chest. */
   for (const m of MACHINES) dressMachine(m);
-  /* THE HALL WALKER — peeker.glb was loaded but never used. It gets the
-     corridor: hung on the anchor that updateHallWalk drives down the hall
-     toward the door. Faces -Z (into the room) like the other characters. */
-  if (MODELS.peeker && horror.hallFigure) {
-    const inst = MODELS.peeker.scene.clone(true);
-    fitInstance(inst, 1.98);
-    inst.rotation.x = 0.10;
-    /* same reason as the corridor itself: it stands beyond the doorway, where
-       the scene fog would erase it before you ever saw it move */
-    inst.traverse(o => {
-      if (o.isMesh && o.material) {
-        o.material = o.material.clone();
-        o.material.fog = false;
-        o.material.needsUpdate = true;
-      }
-    });
-    horror.hallFigure.add(inst);
-    horror.hallBody = inst;
-    horror.hallBodyY = inst.position.y;
-    devRegister('peeker', horror.hallFigure);
-  }
+  /* THE HALL WALKER is gone. peeker.glb is a big disembodied peering head, and
+     having it wander the corridor muddied the one thing the hallway is for:
+     the collector coming to the door. The corridor now belongs to the collector
+     alone (the endgame figure is a separate job). The anchor and
+     updateHallWalk survive unused so a future character can be hung on them. */
   /* prisoner is wired as the co-op avatar (makeAvatar). */
   if (horror.watcher) devRegister('watcher', horror.watcher);
   devRender();
@@ -65301,13 +65312,9 @@ function updateHallWalk(dt) {
     if (horror.hallWalk >= 1.45) { horror.hallWalk = 0; hf.visible = false; }
   } else {
     if (hf.visible) hf.visible = false;
-    /* ambient: every so often, something walks the corridor whether or not you
-       happen to be looking at the door. Catching it by chance is the point. */
-    horror.hallNext = (horror.hallNext == null ? 20 : horror.hallNext) - dt;
-    if (horror.hallNext <= 0) {
-      horror.hallNext = 30 + Math.random() * 45;
-      sendHallWalker();
-    }
+    /* The ambient corridor walker is switched off along with the peeker model —
+       the hallway is the collector's approach and nothing else should be moving
+       down it. sendHallWalker() still works if a future figure wants the slot. */
   }
 
   /* the corridor lamps are failing, so the hall never sits still */
@@ -65329,30 +65336,43 @@ function updateHallWalk(dt) {
    `horror.collectorAtDoor` goes true on arrival, which is the hook for making
    the tray appear because it arrived rather than on a timer. */
 const _colTgt = new THREE.Vector3();
-const SIT_DROP = 0.40;      /* how far the figure sinks to read as seated */
+/* Rewritten for the rigged model (it used to sink the whole figure by SIT_DROP
+   to fake sitting, and lurk in view down the corridor all night):
+     - IDLE means GONE. It waits out of sight past the end of the corridor and
+       is hidden outright, so you never catch it standing about doing nothing.
+       Whatever is out there should only be there when it is coming for you.
+     - It walks in along the corridor floor at y=0. No sinking, no floating.
+     - The walk clip only runs while it is actually travelling, so it stops
+       marching on the spot the moment it reaches the door. */
 function updateCollectorWalk(dt) {
   const c = horror.collector;
   if (!c || !horror.collectorSeat) return;
 
   const wantDoor = !!(game.offering && !game.paid && !game.runOver);
-  _colTgt.copy(wantDoor ? horror.collectorDoor : horror.collectorSeat);
+
+  /* Where it waits when it has no business with you: off the end of the hall,
+     to one side, so when it does come it walks IN rather than blinking on. */
+  if (!horror.collectorHome) {
+    horror.collectorHome = new THREE.Vector3(
+      horror.collectorSeat.x + 0.55,
+      0,
+      (horror.hallZFar != null ? horror.hallZFar : horror.collectorSeat.z) + 1.4
+    );
+  }
+  _colTgt.copy(wantDoor ? horror.collectorDoor : horror.collectorHome);
 
   const dx = _colTgt.x - c.position.x, dz = _colTgt.z - c.position.z;
   const dist = Math.hypot(dx, dz);
   const moving = dist > 0.07;
 
-  /* Sit/stand. There is no rig to fold, so "seated" is the whole figure sunk
-     to seat height behind the chair back — crude up close, but it is only ever
-     read from across a corridor through a barred window, where it works. It
-     stands BEFORE it starts walking, so you see it rise and then come. */
-  const wantSeated = (!wantDoor && !moving) ? 1 : 0;
-  horror.collectorSeated += (wantSeated - horror.collectorSeated) * Math.min(1, dt * 2.4);
-  c.position.y = -SIT_DROP * horror.collectorSeated;
+  c.position.y = 0;                       /* feet on the corridor floor */
 
-  /* don't walk until it's most of the way up out of the chair */
-  const risen = horror.collectorSeated < 0.25;
+  /* Visible while it is coming, waiting at the door, or walking back. Once it
+     has retreated all the way home it disappears until it is owed again. */
+  const away = !wantDoor && !moving;
+  c.visible = !away;
 
-  if (moving && risen) {
+  if (moving) {
     const stepLen = (wantDoor ? 0.85 : 0.60) * dt;   /* comes faster than it goes */
     const k = Math.min(1, stepLen / dist);
     c.position.x += dx * k;
@@ -65363,13 +65383,22 @@ function updateCollectorWalk(dt) {
     while (turn >  Math.PI) turn -= Math.PI * 2;
     while (turn < -Math.PI) turn += Math.PI * 2;
     c.rotation.y += turn * Math.min(1, dt * 3.2);
-  } else if (!moving) {
-    /* settle facing the door (and you) whether waiting or sat back down */
+  } else {
+    /* settle facing the door, and you */
     let turn = 0.16 - c.rotation.y;
     while (turn >  Math.PI) turn -= Math.PI * 2;
     while (turn < -Math.PI) turn += Math.PI * 2;
     c.rotation.y += turn * Math.min(1, dt * 2.0);
   }
+
+  /* Drive the walk clip off actual travel — a rigged figure striding on the
+     spot at the door is worse than one standing still. */
+  const act = c.userData.actions && c.userData.actions[c.userData.current];
+  if (act) {
+    if (moving && act.paused) { act.paused = false; }
+    else if (!moving && !act.paused) { act.paused = true; act.time = 0; }
+  }
+
   horror.collectorAtDoor = wantDoor && !moving;
 }
 
