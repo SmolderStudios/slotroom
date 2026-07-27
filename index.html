@@ -61,6 +61,18 @@
     text-shadow:0 0 18px #ff4df0,0 0 4px #fff;letter-spacing:2px;
     text-align:center;white-space:nowrap}
 
+  /* ---- dev tools panel (F1) ---- */
+  #devPanel{position:absolute;left:12px;top:12px;display:none;z-index:29;
+    font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;
+    background:rgba(6,6,8,.88);border:1px solid #3ad6c0;color:#cfe8e4;
+    padding:9px 12px;min-width:270px;max-width:340px;white-space:pre;
+    text-shadow:none;letter-spacing:0}
+  #devPanel.on{display:block}
+  #devPanel b{color:#3ad6c0;font-weight:400}
+  #devPanel .on1{color:#7dff9a}
+  #devPanel .off1{color:#7a8a88}
+  #devPanel .sel{color:#ffd24a}
+
   /* ---- fade to black ---- */
   #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;
     z-index:30}
@@ -187,6 +199,10 @@
   <div id="prompt">[ E ] PULL LEVER</div>
   <div id="toast"></div>
   <div id="netTag" class="solo"></div>
+
+  <!-- dev tools (F1). Keyboard-driven: the game holds pointer lock, so a
+       click-based menu would mean unlocking and losing the room every time. -->
+  <div id="devPanel"></div>
 
   <!-- what the figurine you're looking at actually does -->
   <div id="itemInfo" class="box">
@@ -61389,6 +61405,27 @@ const player = {
 };
 const keys = Object.create(null);
 
+/* ---- dev tools (F1) ------------------------------------------------------
+   A keyboard-driven inspector, because the game holds pointer lock while you
+   play — a DOM menu you have to click would mean releasing the mouse and
+   dropping back to the pause screen every time. Everything here is off by
+   default and touches nothing unless you turn it on. */
+const dev = {
+  open: false,        /* F1 panel visible */
+  noclip: false,      /* walk through walls + props, and fly */
+  sel: 0,             /* which model is selected in the panel */
+  speed: 2.5,         /* noclip fly speed */
+  slowmo: 1,          /* animation time scale */
+  hideRoom: false,    /* hide the room shell so you can see a model isolated */
+};
+/* Every animated/inspectable model registers here so the panel can list them,
+   scrub their clips and teleport you to them. */
+const DEV_MODELS = [];
+function devRegister(name, holder) {
+  if (!holder) return;
+  DEV_MODELS.push({ name, holder });
+}
+
 /* Stepping up to the machine parks the camera at FOCUS_POS. You give up
    walking, but keep full look freedom — the room should still be able to
    move behind you while you're staring at the reels. */
@@ -61432,6 +61469,14 @@ function exitFocus() {
 }
 
 addEventListener('keydown', e => {
+  /* F1 works even through overlays, so you can always get the tools back */
+  if (e.code === 'F1') { e.preventDefault(); dev.open = !dev.open; devRender(); return; }
+  /* Dev keys work even with an overlay up. Losing pointer lock (alt-tab, or
+     just pressing Esc) raises the pause menu, and if the tools died with it
+     you could never toggle noclip from the menu you were looking at. They're
+     handled BEFORE the ui.blocking gate for that reason, and they swallow
+     their key so letters the game also binds (N, C, P) don't double-fire. */
+  if (dev.open && devKey(e)) { e.preventDefault(); return; }
   if (ui.blocking) return;
   keys[e.code] = true;
   if (e.code === 'KeyE') interact();
@@ -61441,6 +61486,115 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyF') { if (game.offering && game.paid) finishNight(); }
   if (e.code === 'KeyM') toast(AUDIO.toggleMute() ? 'SOUND OFF' : 'SOUND ON', 900);
 });
+
+/* ---- dev tools: keys, panel, model inspection ---------------------------- */
+function devSel() { return DEV_MODELS[dev.sel] || null; }
+
+function devKey(e) {
+  const M = devSel();
+  switch (e.code) {
+    case 'KeyN':                                   /* noclip */
+      dev.noclip = !dev.noclip;
+      if (!dev.noclip) player.pos.y = 1.62;
+      toast(dev.noclip ? 'NOCLIP ON' : 'NOCLIP OFF', 700); break;
+    case 'BracketLeft':  dev.sel = (dev.sel - 1 + DEV_MODELS.length) % (DEV_MODELS.length || 1); break;
+    case 'BracketRight': dev.sel = (dev.sel + 1) % (DEV_MODELS.length || 1); break;
+    case 'KeyC': {                                 /* cycle the clip on the selected model */
+      if (!M || !M.holder.userData.actions) break;
+      const names = M.holder.userData.clipNames || [];
+      if (names.length < 2) { toast('ONLY 1 CLIP', 700); break; }
+      const i = (names.indexOf(M.holder.userData.current) + 1) % names.length;
+      devPlayClip(M, names[i]);
+      break;
+    }
+    case 'KeyT': {                                 /* teleport to the selected model */
+      if (!M) break;
+      const p = M.holder.position;
+      player.pos.set(p.x, 1.62, p.z + 1.8);
+      player.yaw = Math.PI;                        /* face it (yaw 0 looks -Z) */
+      toast('TELEPORTED TO ' + M.name.toUpperCase(), 800);
+      break;
+    }
+    case 'KeyB': {                                 /* bring it to you */
+      if (!M) break;
+      const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+      M.holder.position.set(player.pos.x + fx * 2.2, M.holder.position.y, player.pos.z + fz * 2.2);
+      M.holder.rotation.y = player.yaw + Math.PI;
+      toast('MOVED ' + M.name.toUpperCase() + ' TO YOU', 800);
+      break;
+    }
+    case 'Comma':  dev.slowmo = Math.max(0, +(dev.slowmo - 0.25).toFixed(2)); devApplySpeed(); break;
+    case 'Period': dev.slowmo = Math.min(3, +(dev.slowmo + 0.25).toFixed(2)); devApplySpeed(); break;
+    case 'KeyP': dev.slowmo = dev.slowmo === 0 ? 1 : 0; devApplySpeed(); break;  /* pause anim */
+    case 'KeyH':                                   /* hide the room to see a model clean */
+      dev.hideRoom = !dev.hideRoom;
+      devApplyHideRoom(); break;
+    case 'Minus':  dev.speed = Math.max(1, +(dev.speed - 1).toFixed(1)); break;
+    case 'Equal':  dev.speed = Math.min(20, +(dev.speed + 1).toFixed(1)); break;
+    default: return false;                         /* not ours — let the game have it */
+  }
+  devRender();
+  return true;
+}
+
+function devPlayClip(M, name) {
+  const A = M.holder.userData.actions; if (!A || !A[name]) return;
+  const cur = M.holder.userData.current;
+  if (cur && A[cur] && cur !== name) A[cur].fadeOut(0.2);
+  A[name].reset().fadeIn(0.2).play();
+  M.holder.userData.current = name;
+}
+function devApplySpeed() {
+  for (const m of MODEL_MIXERS) m.timeScale = dev.slowmo;
+}
+/* Hide the room shell (walls/floor/props) but keep the characters, so a model
+   can be inspected without the room in the way. Anything registered as a dev
+   model — and its own children — stays visible. */
+function devApplyHideRoom() {
+  const keep = new Set();
+  for (const M of DEV_MODELS) keep.add(M.holder);
+  for (const o of scene.children) {
+    if (keep.has(o) || o.isLight || o.isCamera) continue;
+    if (o.userData && o.userData.devKeep) continue;
+    o.visible = !dev.hideRoom;
+  }
+}
+
+function devRender() {
+  const el = document.getElementById('devPanel');
+  if (!el) return;
+  el.classList.toggle('on', dev.open);
+  if (!dev.open) return;
+  const M = devSel();
+  const on = b => b ? '<span class="on1">ON </span>' : '<span class="off1">OFF</span>';
+  let s = '<b>── DEV TOOLS (F1) ─────────</b>\n';
+  s += 'N  noclip      ' + on(dev.noclip) + '   -/+ speed ' + dev.speed.toFixed(0) + '\n';
+  s += 'H  hide room   ' + on(dev.hideRoom) + '\n';
+  s += 'P  pause anim  ' + on(dev.slowmo === 0) + '   ,/. rate ' + dev.slowmo.toFixed(2) + '\n';
+  s += '<b>── MODEL ──────────────────</b>\n';
+  if (!M) {
+    s += '(none loaded yet)\n';
+  } else {
+    s += '[ ]  ' + (dev.sel + 1) + '/' + DEV_MODELS.length + '  <span class="sel">' + M.name.toUpperCase() + '</span>\n';
+    const ud = M.holder.userData;
+    if (ud.clipNames && ud.clipNames.length) {
+      s += 'C   clip: <span class="sel">' + (ud.current || '?') + '</span> (' + ud.clipNames.length + ')\n';
+      const act = ud.actions && ud.actions[ud.current];
+      if (act) {
+        const dur = act.getClip().duration;
+        s += '    t=' + (act.time % (dur || 1)).toFixed(2) + '/' + dur.toFixed(2) + 's\n';
+      }
+    } else {
+      s += '    <span class="off1">no animation clips</span>\n';
+    }
+    const p = M.holder.position;
+    s += '    at ' + p.x.toFixed(2) + ', ' + p.z.toFixed(2) + '\n';
+    s += 'T   teleport to it   B  bring to me\n';
+  }
+  s += '<b>───────────────────────────</b>\n';
+  s += 'WASD fly · SPACE up · SHIFT down';
+  el.innerHTML = s;
+}
 addEventListener('keyup', e => { keys[e.code] = false; });
 
 /* one key for everything — whichever interactable you're actually facing */
@@ -61526,9 +61680,11 @@ function updatePlayer(dt) {
     : Math.max(target, focus.blend - rate);
   focus.frozen = focus.blend > 0 && focus.blend < 1;
 
-  const held = focus.seated || focus.blend > 0;   /* no walking once committed */
+  /* noclip ignores the seated lock too — otherwise you can get stuck parked at
+     a machine with no way to fly off and look at anything. */
+  const held = (focus.seated || focus.blend > 0) && !dev.noclip;
 
-  const speed = 2.5;
+  const speed = dev.noclip ? dev.speed : 2.5;
   const fwd = held ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
   const str = held ? 0 : (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
 
@@ -61543,8 +61699,17 @@ function updatePlayer(dt) {
   player.vel.x = lerp(player.vel.x, nx * speed, 1 - Math.pow(0.0008, dt));
   player.vel.z = lerp(player.vel.z, nz * speed, 1 - Math.pow(0.0008, dt));
 
-  moveAxis('x', player.vel.x * dt);
-  moveAxis('z', player.vel.z * dt);
+  if (dev.noclip) {
+    /* straight through everything, plus Space/Ctrl to fly */
+    player.pos.x += player.vel.x * dt;
+    player.pos.z += player.vel.z * dt;
+    const up = (keys.Space ? 1 : 0) - (keys.ControlLeft || keys.ShiftLeft ? 1 : 0);
+    player.pos.y = clamp(player.pos.y + up * dev.speed * dt, -4, 12);
+  } else {
+    moveAxis('x', player.vel.x * dt);
+    moveAxis('z', player.vel.z * dt);
+    if (player.pos.y !== 1.62) player.pos.y = 1.62;   /* restore eye height on exit */
+  }
 
   /* head bob tied to actual speed */
   const sp = Math.hypot(player.vel.x, player.vel.z);
@@ -64926,6 +65091,31 @@ function spawnModel(name, { position, rotation, rotationY, clip, scale } = {}) {
 }
 
 const MODEL_MIXERS = [];
+
+/* Console handle. Everything in this file is module-scoped, so without this
+   there is no way to poke at a model from devtools. `step()` also lets frames
+   be advanced by hand, which is the only way to verify animation in a
+   backgrounded/automated browser where rAF never fires.
+   Declared HERE, after MODEL_MIXERS — putting it up with the other dev state
+   crashed the module in the temporal dead zone (caught by __bootErr). */
+window.SR = {
+  dev, models: DEV_MODELS, mixers: MODEL_MIXERS,
+  step(dt = 1 / 60, n = 1) { for (let i = 0; i < n; i++) for (const m of MODEL_MIXERS) m.update(dt); },
+  bones(modelName) {
+    const M = DEV_MODELS.find(x => x.name === modelName); if (!M) return [];
+    const out = []; M.holder.traverse(o => { if (o.isBone) out.push(o.name); });
+    return out;
+  },
+  bone(modelName, boneName) {
+    const M = DEV_MODELS.find(x => x.name === modelName); if (!M) return null;
+    let hit = null;
+    M.holder.traverse(o => { if (!hit && o.isBone && o.name === boneName) hit = o; });
+    if (!hit) return null;
+    const v = new THREE.Vector3(); hit.getWorldPosition(v);
+    return { x: +v.x.toFixed(4), y: +v.y.toFixed(4), z: +v.z.toFixed(4) };
+  },
+};
+
 function updateModels(dt) {
   for (const m of MODEL_MIXERS) m.update(dt);
   /* idle breathe / weight-shift on the placed character models */
@@ -64977,16 +65167,37 @@ function fitInstance(inst, targetH) {
   inst.position.y -= _mb.min.y;      /* feet on the floor */
   return inst;
 }
-function placeModel(name, { pos, height, rotationY = 0 }) {
+/* `animate:true` wires an AnimationMixer for models that ship with clips (the
+   rigged characters). Two things matter:
+     - it uses entry.scene DIRECTLY rather than a clone. SkeletonUtils.clone is
+       what you need to duplicate a skinned mesh; a plain clone(true) shares the
+       skeleton and animates the original. We only ever place one of each of
+       these, so taking the original is both correct and cheaper.
+     - the returned holder carries `.mixer` / `.actions` so the dev menu can
+       scrub between clips. */
+function placeModel(name, { pos, height, rotationY = 0, animate = false, clip = null } = {}) {
   const entry = MODELS[name];
   if (!entry) return null;
-  const inst = entry.scene.clone(true);
+  const hasClips = animate && entry.clips && entry.clips.length;
+  const inst = hasClips ? entry.scene : entry.scene.clone(true);
   fitInstance(inst, height);
   const holder = new THREE.Group();
   holder.add(inst);
   if (pos) holder.position.copy(pos);
   holder.rotation.y = rotationY;
   scene.add(holder);
+  if (hasClips) {
+    const mixer = new THREE.AnimationMixer(inst);
+    const actions = {};
+    for (const c of entry.clips) actions[c.name] = mixer.clipAction(c);
+    const first = (clip && actions[clip]) ? clip : entry.clips[0].name;
+    actions[first].play();
+    MODEL_MIXERS.push(mixer);
+    holder.userData.mixer = mixer;
+    holder.userData.actions = actions;
+    holder.userData.clipNames = entry.clips.map(c => c.name);
+    holder.userData.current = first;
+  }
   return holder;
 }
 
@@ -65014,10 +65225,16 @@ function wireModels() {
        OUT in the corridor, sat in its chair where you can see it through the
        barred window, and only comes to the door when the debt falls due. */
     const seat = horror.collectorSeat || new THREE.Vector3(-0.29, 0, 6.2);
-    const h = placeModel('collector', { pos: seat.clone(), height: 1.95, rotationY: 0.16 });
+    const h = placeModel('collector', { pos: seat.clone(), height: 1.95, rotationY: 0.16, animate: true });
     if (h) {
-      h.children[0].rotation.x = 0.16;   /* hunch forward — a lurch, not a stiff T */
-      LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
+      const rigged = !!h.userData.mixer;
+      /* A rigged model animates its own limbs, so the old stopgaps have to go:
+         the forward hunch fought the rig's spine, and the LIVING idle sway
+         double-moved a body that's already breathing in its clip. */
+      if (!rigged) {
+        h.children[0].rotation.x = 0.16;   /* hunch forward — a lurch, not a stiff T */
+        LIVING.push({ node: h.children[0], y0: h.children[0].position.y, ph: 1.7, amt: 1 });
+      }
       /* beyond the doorway, so the scene fog would otherwise erase it */
       h.traverse(o => {
         if (o.isMesh && o.material) {
@@ -65028,6 +65245,7 @@ function wireModels() {
       });
       horror.collector = h;
       horror.collectorSeated = 1;        /* 1 = sat down, 0 = on its feet */
+      devRegister('collector', h);
     }
   }
   /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
@@ -65052,8 +65270,11 @@ function wireModels() {
     horror.hallFigure.add(inst);
     horror.hallBody = inst;
     horror.hallBodyY = inst.position.y;
+    devRegister('peeker', horror.hallFigure);
   }
   /* prisoner is wired as the co-op avatar (makeAvatar). */
+  if (horror.watcher) devRegister('watcher', horror.watcher);
+  devRender();
 }
 
 /* Walks the figure the length of the corridor toward the door, then holds at
@@ -65618,6 +65839,8 @@ function step(dt) {
   updatePrompt();
   updateHorror(dt);
   updateModels(dt);
+  /* live clip time in the panel — cheap, and only while it's open */
+  if (dev.open && (dev._t = (dev._t || 0) + dt) > 0.1) { dev._t = 0; devRender(); }
   updateChains();
   stepCharacterPreview(dt);
   net.tick(dt);
