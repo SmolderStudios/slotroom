@@ -60093,6 +60093,10 @@ function buildTextures() {
     g.font = '900 30px "Arial Black", sans-serif';
     g.textBaseline = 'middle'; g.textAlign = 'center';
     g.fillText('PATTERN', 8 + SPLIT / 2, 8 + HDR / 2);
+    /* same trap as CHANCE on the symbol board: the longest word sits in the
+       narrowest column, and the panel got narrower when the boards were fitted
+       to the delivered frames. Shrink it rather than clip it. */
+    g.font = '900 24px "Arial Black", sans-serif';
     g.fillText('MULTIPLIER', 8 + SPLIT + (w - 16 - SPLIT) / 2, 8 + HDR / 2);
 
     PATTERNS.forEach((p, i) => {
@@ -60299,8 +60303,8 @@ function buildTextures() {
   }, { repeat: [3, 1] });
 
   /* first draw of the two boards, from the base numbers */
-  TEX.patterns = BOARD_TEX.patterns = makeTex(560, 760, drawPatternBoard, { smooth: true });
-  TEX.symbols  = BOARD_TEX.symbols  = makeTex(560, 760, drawSymbolBoard,  { smooth: true });
+  TEX.patterns = BOARD_TEX.patterns = makeTex(BOARD_TEX_W, boardTexH('patterns'), drawPatternBoard, { smooth: true });
+  TEX.symbols  = BOARD_TEX.symbols  = makeTex(BOARD_TEX_W, boardTexH('symbols'),  drawSymbolBoard,  { smooth: true });
 }
 
 /* Redraw both boards against the charms currently fitted. Called after every
@@ -60567,24 +60571,33 @@ function buildRoom() {
 
   /* --- the two reference boards, one on each side wall, so you can read
          either one with a head-turn from the machine --- */
-  const mkBoard = (tex, side, z) => {
-    const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.34, 1.80),
-      new THREE.MeshBasicMaterial({ map: tex })
-    );
-    /* housing is 0.07 thick centred at 0.035 in from the wall, so the panel
-       has to sit proud of 0.07 or it renders inside the box */
-    box(0.07, 1.92, 1.46, lam({ map: TEX.metal, color: 0x6a5a4a }),
-        side * (w / 2 - 0.035), 1.44, z);
-    m.position.set(side * (w / 2 - 0.085), 1.44, z);
-    m.rotation.y = -side * Math.PI / 2;
-    scene.add(m);
+  /* Each board is a group standing flat against its wall: a procedural housing
+     that acts as the fallback frame, plus the live canvas. dressBoards() swaps
+     the housing for the delivered .glb and moves the canvas onto its measured
+     panel — so the room reads the same whether or not the models loaded. */
+  const mkBoard = (key, tex, side, z) => {
+    const g = new THREE.Group();
+    g.position.set(side * (w / 2 - 0.10), 0, z);
+    g.rotation.y = -side * Math.PI / 2;
+    scene.add(g);
+
+    const p = BOARD_PANEL[key];
+    const fbFrame = box(0.07, 1.92, 1.46, lam({ map: TEX.metal, color: 0x6a5a4a }), 0, 1.44, 0);
+    if (fbFrame) { fbFrame.position.set(0, 1.44, -0.06); g.add(fbFrame); }
+
+    const canvas = new THREE.Mesh(
+      new THREE.PlaneGeometry(p.w / p.h * 1.20, 1.20),
+      new THREE.MeshBasicMaterial({ map: tex }));
+    canvas.position.set(0, 1.44, 0.02);
+    g.add(canvas);
+
     const L = new THREE.PointLight(0xffa64a, 4.0, 2.6, 2);
-    L.position.set(side * (w / 2 - 0.6), 1.44, z);
-    scene.add(L);
+    L.position.set(0, 1.44, 0.60);
+    g.add(L);
+    BOARDS.push({ key, group: g, canvas, fallback: fbFrame });
   };
-  mkBoard(TEX.symbols,  -1, -0.55);   /* what each symbol pays, and how often */
-  mkBoard(TEX.patterns,  1, -0.55);   /* which shapes pay, and how much */
+  mkBoard('symbols',  TEX.symbols,  -1, -0.55);   /* what each symbol pays */
+  mkBoard('patterns', TEX.patterns,  1, -0.55);   /* which shapes pay, and how much */
 
   /* --- shelving, right wall, pushed clear of the board --- */
   const matWood = lam({ map: TEX.wood, color: 0x9a8878 });
@@ -60800,6 +60813,35 @@ const BET_X     =  0.175 * H_MACH, BET_W    = 0.195 * H_MACH;
 
 const FACE_Z    = 0.32 * H_MACH;             /* bbox front: lever + camera only */
 
+/* ---- the delivered wall boards ------------------------------------------
+   Both frames arrived with a genuinely blank, genuinely FLAT recessed panel
+   (no rake, unlike the cabinet), so each just needs its canvas floated a few
+   mm proud of the measured rectangle. Probed the same way as the machine: an
+   ortho front render with world-Z in the colour channel, read along a
+   scanline — the panel shows as a dead-flat plateau between the frame steps.
+
+   The two panels are NOT the same shape as each other, and neither is 3:4.
+   Rather than stretch the chart or letterbox it, each board's texture is
+   generated at its own panel aspect — the painters lay out from the (w,h)
+   they are handed, so this costs nothing and the type stays square. */
+const BOARD_H      = 1.50;                   /* frame height, metres */
+const BOARD_BASE_Y = 0.55;                   /* floor to the bottom of the frame */
+const BOARD_PANEL = {
+  symbols:  { x: 0.003, y: 0.505, w: 0.485, h: 0.540, z: -0.004 },
+  patterns: { x: 0.005, y: 0.435, w: 0.500, h: 0.620, z:  0.019 },
+};
+const BOARD_TEX_W = 560;
+const boardTexH = k => Math.round(BOARD_TEX_W * BOARD_PANEL[k].h / BOARD_PANEL[k].w);
+
+/* ---- the delivered charm rack -------------------------------------------
+   Five open shelf boards, found by histogramming up-facing vertices rather
+   than guessing: a shelf is a spike of upward normals at one height. Values
+   are model space (height = 1) and get scaled by RACK_H. */
+const RACK_H  = 1.55;
+const SHELF_Y = [0.22, 0.37, 0.52, 0.67, 0.84];
+const RACK_COLS = 4;
+const SEAT_H  = 0.52;                        /* stool: its top lands at 0.99 of this */
+
 /* A shallow cylindrical arc for the reel face. The 5x3 canvas maps straight on
    (u across the columns, v down the rows) but the SURFACE curves away into the
    cabinet, so the reels read as physical drums sitting behind glass instead of
@@ -60835,6 +60877,7 @@ function reelDrumGeo(w, h, deg, seg = 10, cols = 5) {
 }
 
 const MACHINES = [];
+const BOARDS   = [];                         /* the two wall boards */
 let myMachine = null;                        /* the one this client owns */
 
 function machineSpec(idx) {
@@ -61182,19 +61225,28 @@ function buildMachine(idx) {
   /* ---- charm rack: token math is unchanged (spawnCharmToken keys off rackX,
      tableZ and TABLE.h), so this stays a tray at the same local offsets — just
      freestanding beside the machine now, in front of the charm cabinet. ---- */
-  box(0.72, 0.04, 0.58, lam({ map: TEX.metal, color: 0x6e5c48 }),
-      m.rackX, TABLE.h + 0.02, m.tableZ);
-  [[-0.36, 0], [0.36, 0], [0, -0.29], [0, 0.29]].forEach(([ox, oz], i) => {
-    box(i < 2 ? 0.03 : 0.72, 0.09, i < 2 ? 0.58 : 0.03,
-        lam({ map: TEX.metal, color: 0x7e6a52 }),
-        m.rackX + ox, TABLE.h + 0.06, m.tableZ + oz);
+  /* fallback shelving: five bare boards at the delivered rack's own heights,
+     so tokens land in the right places with or without rack.glb */
+  m.rackFallback = new THREE.Group();
+  SHELF_Y.forEach(sy => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.035, 0.34),
+      lam({ map: TEX.metal, color: 0x6e5c48 }));
+    b.position.set(m.rackX, sy * RACK_H, m.tableZ + 0.06);
+    m.rackFallback.add(b);
   });
+  [-0.30, 0.30].forEach(ox => {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.05, RACK_H, 0.36),
+      lam({ map: TEX.metal, color: 0x7e6a52 }));
+    p.position.set(m.rackX + ox, RACK_H / 2, m.tableZ + 0.06);
+    m.rackFallback.add(p);
+  });
+  scene.add(m.rackFallback);
   m.rackLight = new THREE.PointLight(0xffc060, 2.4, 1.7, 2);
-  m.rackLight.position.set(m.rackX, TABLE.h + 0.52, m.tableZ + 0.15);
+  m.rackLight.position.set(m.rackX, RACK_H * 0.62, m.tableZ + 0.50);
   scene.add(m.rackLight);
 
   /* ---- the stool you sit on + the winch drum the ankle-chain feeds off ---- */
-  buildStool(m.x, m.tableZ + 0.86);            /* pulled in: it's a table now */
+  m.stoolFallback = buildStool(m.x, m.tableZ + 0.86);   /* swapped for seat.glb */
   m.drum = buildChainDrum(m.x, m.tableZ + 0.58);   /* bolted to the floor UNDER it */
 
   /* ---- screen glow ---- */
@@ -62461,9 +62513,17 @@ function spawnCharmToken(mach, id, idx) {
   if (!c) return;
   /* the rack shows the actual figurine you bought, at three-quarter size */
   const m = charmFigure(c);
-  m.scale.setScalar(0.78);
-  const col = idx % 4, row = (idx / 4) | 0;
-  m.position.set(mach.rackX - 0.24 + col * 0.24, TABLE.h + 0.04, mach.tableZ - 0.16 + row * 0.17);
+  /* The rack is a five-shelf unit now, not a flat tray, so tokens fill it
+     shelf by shelf from the bottom and wrap round when it's full — twenty on
+     display, which is about as deep as a run gets. Smaller than the old tray
+     scale because four to a shelf on a 0.5m board is a tighter fit. */
+  m.scale.setScalar(0.62);
+  const perShelf = RACK_COLS;
+  const shelf = ((idx / perShelf) | 0) % SHELF_Y.length;
+  const col = idx % perShelf;
+  m.position.set(mach.rackX - 0.19 + col * 0.127,
+                 SHELF_Y[shelf] * RACK_H + 0.012,
+                 mach.tableZ + 0.06);
   m.rotation.y = rand() * 0.8 - 0.4;
   scene.add(m);
   mach.tokens.push(m);
@@ -63302,7 +63362,7 @@ function buyAimed() {
 const _toRack = new THREE.Vector3();
 function nearRack() {
   for (const m of MACHINES) {
-    const p = _toRack.set(m.rackX, TABLE.h + 0.15, m.tableZ);
+    const p = _toRack.set(m.rackX, RACK_H * 0.45, m.tableZ + 0.10);
     if (player.pos.distanceTo(p) > 1.4) continue;
     const to = p.clone().sub(player.pos).normalize();
     const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
@@ -66049,6 +66109,10 @@ const DELIVERED = {
   peeker:      'models/peeker.glb',
   slotmachine: 'models/slotmachine.glb',
   slotlever:   'models/slotlever.glb',
+  rack:          'models/rack.glb',
+  seat:          'models/seat.glb',
+  symbol_board:  'models/symbol_board.glb',
+  pattern_board: 'models/pattern_board.glb',
 };
 let modelsReady = false;
 function loadDeliveredModels() {
@@ -66163,6 +66227,7 @@ function wireModels() {
   /* MACHINES — swap each procedural fallback box for the real slotmachine.glb
      cabinet and stand it on the table. */
   for (const m of MACHINES) dressMachine(m);
+  dressBoards();
   /* THE HALL WALKER is gone. peeker.glb is a big disembodied peering head, and
      having it wander the corridor muddied the one thing the hallway is for:
      the collector coming to the door. The corridor now belongs to the collector
@@ -66301,7 +66366,40 @@ function sendHallWalker() {
    The charm cabinet (hutch) and locked chest that used to flank each station
    are GONE: the machine shrank to a bar-top unit on a table, and the charm
    shelf beside it is now the only place charms live. */
+/* The wall boards: swap the procedural housing for the delivered frame and
+   drop the live canvas onto its measured blank panel. */
+function dressBoards() {
+  for (const b of BOARDS) {
+    if (!MODELS[b.key === 'symbols' ? 'symbol_board' : 'pattern_board']) continue;
+    const name = b.key === 'symbols' ? 'symbol_board' : 'pattern_board';
+    const inst = MODELS[name].scene.clone(true);
+    fitInstance(inst, BOARD_H);
+    inst.position.y += BOARD_BASE_Y;
+    psxifyModel(inst);
+    b.group.add(inst);
+    if (b.fallback) b.fallback.visible = false;
+
+    const p = BOARD_PANEL[b.key];
+    /* 2% inset so the frame always overlaps the canvas edge — an exact fit
+       shows a seam the moment the vertex-snap shader jitters */
+    b.canvas.geometry.dispose();
+    b.canvas.geometry = new THREE.PlaneGeometry(p.w * BOARD_H * 0.98, p.h * BOARD_H * 0.98);
+    b.canvas.position.set(p.x * BOARD_H, BOARD_BASE_Y + p.y * BOARD_H, p.z * BOARD_H + 0.006);
+  }
+}
+
 function dressMachine(m) {
+  /* the charm rack and the stool, both of which stand beside the machine */
+  if (MODELS.rack) {
+    const inst = placeModel('rack', {
+      pos: new THREE.Vector3(m.rackX, 0, m.tableZ - 0.06), height: RACK_H, rotationY: 0 });
+    if (inst && m.rackFallback) m.rackFallback.visible = false;
+    blocker(m.rackX, m.tableZ - 0.06, 1.14, 0.62);
+  }
+  if (MODELS.seat) {
+    placeModel('seat', { pos: new THREE.Vector3(m.x, 0, m.tableZ + 0.86), height: SEAT_H, rotationY: 0 });
+    if (m.stoolFallback) m.stoolFallback.visible = false;
+  }
   if (!MODELS.slotmachine) return;
   const inst = MODELS.slotmachine.scene.clone(true);
   fitInstance(inst, H_MACH);             /* base to y=0, centred X/Z, group-local */
@@ -66842,7 +66940,7 @@ function boot() {
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
                  buildSkinnedFigure, figureSkin,
                  loadModel, spawnModel, psxifyModel, MODELS, offerFreeCharm, advanceAfterTribute, nearStairs, fundStairs, stairsBuilt,
-                 SYMBOLS, PATTERNS, CHARMS, CHARM_FX };
+                 SYMBOLS, PATTERNS, CHARMS, CHARM_FX, BOARDS, spawnCharmToken, clearCharmTokens };
   animate();
 }
 
