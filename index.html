@@ -88,7 +88,7 @@
     font-family:ui-monospace,Consolas,monospace;text-align:center;max-width:60ch;
     line-height:1.9}
 
-  /* upgrade picker */
+  /* the spread */
   #offer .cards{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;
     padding:0 20px}
   .card{width:min(30vw,250px);min-height:200px;background:#120a08;
@@ -100,31 +100,23 @@
   .card .d{font-size:clamp(11px,1.2vw,14px);color:#c8b8a4;line-height:1.6;
     font-family:ui-monospace,Consolas,monospace;letter-spacing:0}
   .card .pick{margin-top:auto;font-size:12px;color:#ff8a1e;letter-spacing:2px}
-  /* charm ladder: tier badge, ownership, and what the card leads on to */
+  /* the ladder: index badge, how many you hold, and what the card leads on to */
   .card .k .tier{font-weight:400;margin-left:6px;padding:1px 5px;border:1px solid #6a5a48;
     color:#e0c88a;letter-spacing:1px;font-size:10px}
   .card .own{font-size:11px;color:#7ed321;letter-spacing:1px}
   .card .lead{font-size:11px;color:#8a7a68;letter-spacing:.5px;font-style:italic}
-  /* a colour per kind so four cards read apart at a glance */
-  .card.k-PAYOUT{border-color:#6a4a2a}
-  .card.k-PATTERN{border-color:#2a4a6a}
-  .card.k-TEMPO{border-color:#4a5a3a}
-  .card.k-NERVE{border-color:#43505a}
-  .card.k-GREED{border-color:#6a5a1a}
-  .card.k-FUSED{border-color:#5a3a6a}
-  .card.k-LUCK{border-color:#2a5a34}
-  /* the scaling engine — brightest border, it should catch the eye */
-  .card.k-COMPOUND{border-color:#c0761a;box-shadow:0 0 14px rgba(255,138,30,.18)}
-  .card.k-CULL{border-color:#4a4450}
-  /* the boon is the one card on the tray you cannot buy, so it gets to look it */
-  .card.k-RITE{border-color:#e0b02a;box-shadow:0 0 18px rgba(255,208,74,.24)}
-  .card.k-RITE:hover{border-color:#ffe066}
-  /* a curse should look like a bad idea before you read it */
-  .card.k-CURSE{border-color:#8c2233;box-shadow:0 0 18px rgba(192,48,74,.22)}
-  .card.k-CURSE:hover{border-color:#e0455f}
-  .card.k-LUCK:hover,.card.k-COMPOUND:hover{border-color:#ff8a1e}
-  .card.k-PAYOUT:hover,.card.k-PATTERN:hover,.card.k-TEMPO:hover,
-  .card.k-NERVE:hover,.card.k-GREED:hover,.card.k-FUSED:hover{border-color:#ff8a1e}
+  /* one colour per kind, so a spread reads apart before it is read */
+  .card.k-MINOR{border-color:#6a4a2a}
+  .card.k-MINOR:hover{border-color:#ff8a1e}
+  .card.k-MAJOR{border-color:#c0761a;box-shadow:0 0 14px rgba(255,208,74,.18)}
+  .card.k-MAJOR:hover{border-color:#ffe066}
+  /* a reversed card should look like a bad idea before you read it */
+  .card.k-REVERSED{border-color:#8c2233;box-shadow:0 0 18px rgba(192,48,74,.22)}
+  .card.k-REVERSED .n{color:#ff8fa0}
+  .card.k-REVERSED .pick{color:#e0455f}
+  .card.k-REVERSED:hover{border-color:#e0455f}
+  .card.k-ESCAPE{border-color:#2a5a34}
+  .card.k-ESCAPE:hover{border-color:#7ed321}
 
   /* escape menu */
   #menu .row{display:flex;align-items:center;gap:16px;font-size:clamp(12px,1.4vw,16px);
@@ -132,15 +124,15 @@
   #menu .row label{width:150px;text-align:right;color:#8a7a6c}
   #menu input[type=range]{width:min(46vw,300px);accent-color:#ff8a1e}
   #menu .val{width:52px;color:#ffb43a}
-  #menuCharms{display:flex;flex-direction:column;gap:6px;max-width:min(84vw,560px);
+  #menuCards{display:flex;flex-direction:column;gap:6px;max-width:min(84vw,560px);
     max-height:34vh;overflow-y:auto;width:100%}
-  #menuCharms .row2{display:flex;gap:12px;align-items:baseline;
+  #menuCards .row2{display:flex;gap:12px;align-items:baseline;
     border-left:3px solid #5a3c18;padding:5px 0 5px 11px}
-  #menuCharms .row2 b{color:#ffb43a;font-size:13px;letter-spacing:2px;
+  #menuCards .row2 b{color:#ffb43a;font-size:13px;letter-spacing:2px;
     white-space:nowrap;min-width:130px}
-  #menuCharms .row2 span{color:#c8b8a4;font-size:12px;line-height:1.5;
+  #menuCards .row2 span{color:#c8b8a4;font-size:12px;line-height:1.5;
     font-family:ui-monospace,Consolas,monospace;letter-spacing:0}
-  #menuCharms:empty::after{content:'NO CHARMS YET';color:#4a3c30;font-size:12px;
+  #menuCards:empty::after{content:'NO CARDS YET';color:#4a3c30;font-size:12px;
     letter-spacing:2px}
   .btn{font-size:clamp(13px,1.6vw,18px);color:#fff;border:2px solid #ff8a1e;
     padding:11px 30px;letter-spacing:3px;cursor:pointer;background:none}
@@ -266,7 +258,7 @@
     <input type="range" id="sens" min="20" max="300" value="100">
     <span class="val" id="sensV">100</span>
   </div>
-  <div id="menuCharms"></div>
+  <div id="menuCards"></div>
   <button class="btn" id="btnResume">RESUME</button>
   <button class="btn warn" id="btnAbandon">ABANDON RUN</button>
   <p class="sub">Esc closes this and locks the cursor again.</p>
@@ -59913,9 +59905,9 @@ function fitText(g, text, cx, cy, maxW, size, { align = 'center', min = 9, weigh
   g.fillText(text, cx, cy);
 }
 
-/* The two wall boards are redrawn whenever your charms change, so the numbers
+/* The two wall boards are redrawn whenever your hand changes, so the numbers
    on the wall are the numbers you are actually playing — a paytable that still
-   claims skulls pay 110 after you have bought two tiers of skull charms is
+   claims skulls pay 110 after you hold two ranks of the skull suit is
    worse than no paytable. Held here so refreshBoards() can re-run them. */
 let drawPatternBoard = null, drawSymbolBoard = null;
 const BOARD_TEX = { symbols: null, patterns: null };
@@ -60309,8 +60301,8 @@ function buildTextures() {
   TEX.symbols  = BOARD_TEX.symbols  = makeTex(BOARD_TEX_W, boardTexH('symbols'),  drawSymbolBoard,  { smooth: true });
 }
 
-/* Redraw both boards against the charms currently fitted. Called after every
-   charm change; cheap enough (two 560x760 canvases) that it does not need to
+/* Redraw both boards against the cards currently held. Called after every
+   change to the hand; cheap enough (two 560x760 canvases) that it does not need to
    be smarter than "just do it again". */
 function refreshBoards() {
   if (!drawSymbolBoard || !BOARD_TEX.symbols) return;
@@ -60776,7 +60768,7 @@ function buildLamp() {
    Measured, in model space (height = 1):
      reel window   x -0.314..0.262  y 0.221..0.536  z 0.099 at centre, ~12.7deg
      marquee       x -0.274..0.235  y 0.551..0.737  z 0.049 at centre, ~4deg  */
-const TABLE = { h: 0.76 };                   /* kept: charm-rack token height */
+const TABLE = { h: 0.76 };                   /* kept: card-rack token height */
 const MACHINE_XS = [-1.66, 1.66];            /* the two stations */
 const TABLE_H   = 0.74;                      /* tabletop the machine stands on */
 const H_MACH    = 0.80;                      /* machine height, metres (bar-top) */
@@ -60842,7 +60834,7 @@ const BOARD_PANEL = {
 const BOARD_TEX_W = 720;
 const boardTexH = k => Math.round(BOARD_TEX_W * BOARD_PANEL[k].h / BOARD_PANEL[k].w);
 
-/* ---- the delivered charm rack -------------------------------------------
+/* ---- the delivered card rack -------------------------------------------
    Five open shelf boards, found by histogramming up-facing vertices rather
    than guessing: a shelf is a spike of upward normals at one height. Values
    are model space (height = 1) and get scaled by RACK_H. */
@@ -60899,7 +60891,7 @@ function machineSpec(idx) {
     /* the rack clears the TABLE now, not the old cabinet footprint */
     /* The table is 1.34 wide and the rack 1.13, so their half-widths alone are
        1.24 — at 1.06 the shelf was standing inside the tabletop. */
-    rackX: x + side * 1.34,                   /* charm shelf, clear of the table */
+    rackX: x + side * 1.34,                   /* card shelf, clear of the table */
     /* the lever housing is moulded into the model's RIGHT flank, so unlike the
        rest of the furniture this does not mirror per station */
     leverWorld: new THREE.Vector3(x + 0.30 * H_MACH, SCREEN_Y - 0.16, z + FACE_Z - 0.06),
@@ -60917,33 +60909,34 @@ function focusPosOf(m) {
 const FOCUS_YAW   = 0;
 const FOCUS_PITCH = -0.17;
 
-/* charms are placed ON a machine, so effects are read per machine */
-/* Multiplicative all-wins multiplier from COMPOUND charms. Kept out of buff()
+/* cards are placed ON a machine, so effects are read per machine */
+/* Multiplicative all-wins multiplier from every card carrying `mult`. Kept
+   out of buff()
    because that function SUMS, and the whole point of these is that they
    multiply — folding them into the additive pile would flatten the curve back
    into the one that could not keep up with the quota. */
 function buffMult(m) {
   let v = 1;
   if (!m) return 1;
-  for (const id of m.charms) {
-    const c = charmById(id);
+  for (const id of m.cards) {
+    const c = cardById(id);
     if (c && c.mult) v *= c.mult;
   }
   return v;
 }
-/* What the NEXT copy of a charm costs. Repeatable charms get more expensive
+/* What the NEXT copy of a card costs. Repeatable cards get more expensive
    each time, which is what stops one purchase a night from being automatic. */
-function charmCost(c) {
+function cardCost(c) {
   if (!c) return 0;
   if (!c.costGrow) return c.cost;
-  return Math.round(c.cost * Math.pow(c.costGrow, charmCount(c.id)));
+  return Math.round(c.cost * Math.pow(c.costGrow, cardCount(c.id)));
 }
 
 function buff(m, field, key) {
   let v = 0;
   if (!m) return 0;
-  for (const id of m.charms) {
-    const c = charmById(id);
+  for (const id of m.cards) {
+    const c = cardById(id);
     if (!c) continue;
     if (field === 'sym')        v += (c.sym && c.sym[key]) || 0;
     else if (field === 'pat')   v += (c.pat && c.pat[key]) || 0;
@@ -60955,12 +60948,12 @@ function buff(m, field, key) {
     else if (field === 'symWeight') v += (c.symWeight && c.symWeight[key]) || 0;
     else if (field === 'cloverCoins') v += c.cloverCoins || 0;
     else if (field === 'cloverFloor') v += c.cloverFloor || 0;
-    /* each LUCK charm contributes rate x clovers, capped per charm so a big
+    /* each perClover card contributes rate x clovers, capped per card so a big
        hoard cannot run away with the run */
     else if (field === 'perClover') {
       if (c.perClover) v += Math.min(c.perCloverMax || 99, c.perClover * (game.clovers || 0));
     }
-    /* stackable charms appear in m.charms once per copy, so these just add up */
+    /* stackable cards appear in m.cards once per copy, so these just add up */
     else if (field === 'spinCost') v += c.spinCost || 0;
     else if (field === 'timer')  v += c.timer || 0;
     else if (field === 'clovers') v += c.clovers || 0;
@@ -60969,12 +60962,12 @@ function buff(m, field, key) {
 }
 
 /* Room-wide effects: the lights and the thing outside don't care whose
-   table a charm is sitting on, so these read across every machine. */
+   table a card is sitting on, so these read across every machine. */
 function buffRoom(field) {
   let v = 0;
   for (const m of MACHINES) {
-    for (const id of m.charms) {
-      const c = charmById(id);
+    for (const id of m.cards) {
+      const c = cardById(id);
       if (!c) continue;
       if (field === 'power') v = v || !!c.power;
       else if (field === 'dread') v += c.dread || 0;
@@ -61038,7 +61031,7 @@ function buildChainDrum(x, z) {
 
 function buildMachine(idx) {
   const m = machineSpec(idx);
-  m.charms = [];
+  m.cards = [];
   m.tokens = [];
   m.owner = null;                 /* net id, or 'local' when solo */
   m.leverT = 0;
@@ -61233,9 +61226,9 @@ function buildMachine(idx) {
   lrig.add(lev);
   m.lever = lev;
 
-  /* ---- charm rack: token math is unchanged (spawnCharmToken keys off rackX,
+  /* ---- card rack: token math is unchanged (spawnCardToken keys off rackX,
      tableZ and TABLE.h), so this stays a tray at the same local offsets — just
-     freestanding beside the machine now, in front of the charm cabinet. ---- */
+     freestanding beside the machine now, in front of the card cabinet. ---- */
   /* fallback shelving: five bare boards at the delivered rack's own heights,
      so tokens land in the right places with or without rack.glb */
   m.rackFallback = new THREE.Group();
@@ -61320,11 +61313,11 @@ const PATTERNS = [
   { id: 'BELOW',   mult: 7.0,  lines: [_rowAll(2)] },
   { id: 'EYE',     mult: 8.0,  lines: [[[0,2],[1,0],[1,2],[1,4],[2,2]]] },
   /* the whole grid. Honest odds without a wild: about 1 in 25 million. The
-     WILD CLOVER charm is what makes this a real target rather than a myth. */
+     THE FOOL is what makes this a real target rather than a myth. */
   { id: 'JACKPOT', mult: 10.0, lines: [_everything] },
 ];
 
-/* Reel weighting. Charms can now tilt ANY symbol, not just clovers.
+/* Reel weighting. Cards can tilt ANY symbol, not just clovers.
    This exists because a percentage buff on a rare symbol is close to worthless:
    candles are 34/106 of the reel and skulls are 4/106, so three-in-a-row is
    roughly six hundred times rarer for skulls while paying only eleven times
@@ -61332,7 +61325,7 @@ const PATTERNS = [
    whole top half of the ladder a trap. The upper tiers now also DRAW the
    symbol to you, which is both the fix and the better fantasy. */
 /* A symbol's live reel weight: its base, plus everything fitted that pushes it
-   up or (with the CULL charms) pulls it down. FLOORED AT 1 on purpose — a
+   up or (with TEMPERANCE) pulls it down. FLOORED AT 1 on purpose — a
    symbol can be made vanishingly rare but never removed, because a reel strip
    that can't produce one of its own faces breaks every odds display on the
    wall and turns "rare" into "impossible". One helper so the reels and the
@@ -61684,7 +61677,7 @@ function paintDeck(m = myMachine) {
   const spins = Math.max(0, game.spins);
   draw(m.deck.rounds, spins + ' / ' + roundSpins(),
        spins === 0 ? '#ff3d3d' : spins <= 2 ? '#ffb524' : '#ffd66a');
-  /* green when a charm has actually knocked the price down, same tell the
+  /* green when a card has actually knocked the price down, same tell the
      wall boards use for a buffed number */
   const cost = spinCost(m);
   draw(m.deck.bet, String(cost), cost < SPIN_COST ? '#7ed321' : '#ffd66a');
@@ -61814,7 +61807,7 @@ addEventListener('keydown', e => {
      handled BEFORE the ui.blocking gate for that reason, and they swallow
      their key so letters the game also binds (N, C, P) don't double-fire. */
   if (dev.open && devKey(e)) { e.preventDefault(); return; }
-  /* R also rerolls the free-charm hand, and that overlay sets ui.blocking — so
+  /* R also rerolls the spread, and that overlay sets ui.blocking — so
      it has to be answered before the gate or the reroll is unreachable exactly
      where you most want it. */
   if (e.code === 'KeyR' && !document.getElementById('offer').classList.contains('hide')) {
@@ -62146,14 +62139,14 @@ function moveAxis(axis, amount) {
 const BASE_SPINS = 9;
 /* Sized against the simulation: ~11 coins/spin average, so 14 spins gross
    ~154 and cost 42. That clears night 1 and 2 comfortably and goes negative
-   from night 3, which is where the charms are supposed to take over. */
+   from night 3, which is where the deck is supposed to take over. */
 const SPIN_COST = 3;
 /* SHORT CHANGE knocks coins off, but a spin is never free — at zero the whole
    quota loop stops meaning anything. */
 const spinCost = (m) => Math.max(1, SPIN_COST - buff(m || myMachine, 'spinCost'));
 /* 1.25, down from 1.30. At 1.30 the quota outran what a four-card shop could
    actually sell you — a simulated run buying optimally still died on night 6,
-   because you cannot compound off charms you were never offered. 1.25 leaves
+   because you cannot compound off cards you were never dealt. 1.25 leaves
    room for the engine to spin up while still doubling roughly every three
    nights, so the pressure is real and the numbers still reach seven figures. */
 /* Cut with BASE_SPINS from 14 to 9. Fourteen pulls made a night drag and made
@@ -62188,7 +62181,9 @@ const game = {
   quota: roundQuota(1),
   runOver: false,
   settling: false,          /* true between the last spin and the verdict */
-  charms: [],               /* ids of owned passive upgrades */
+  /* cards live on the MACHINE (m.cards), not here — the pause-menu list reads
+     myMachine.cards. There used to be a game.cards mirror that nothing ever
+     wrote to, which is why the owned list in the menu was always empty. */
   offering: false,          /* it is at the door, waiting to be paid */
   paid: false,              /* paid this night — the tray is out */
   collectT: 0,              /* seconds left to pay before it comes in */
@@ -62200,7 +62195,7 @@ const game = {
 };
 
 /* The stairwell. A hole in the floor you pay to dig, one step at a time —
-   a coin sink that competes with charms and with what you owe the collector.
+   a coin sink that competes with the tray and with what you owe the collector.
    Where it goes is the endgame, and the endgame is not built yet. */
 const STAIR_STEPS = 12;              /* how many step-meshes exist carved into the pit */
 const STAIR_PER_STEP = 120;          /* legacy — the dig is shovel-gated now, not paid per step */
@@ -62216,79 +62211,94 @@ const stairsBuilt = () => Math.min(DIG_MAX, game.dug);
 const canForge = () => game.builtShovel || game.parts >= SHOVEL_PARTS;
 
 /* ---------------------------------------------------------------- [S-13]
-   Charms: passive upgrades handed through the door slot between nights.
-   Every effect is read through buff() at the point of use, so adding one
-   here is the only edit needed. */
+   THE DECK. Tarot cards, dealt to you between nights — the only upgrades in
+   the game.
 
-/* ---------------------------------------------------------------- [S-09b]
-   CHARMS. Rebuilt 2026-07-27 into a LADDER rather than a flat list.
+   This replaced CHARMS wholesale (2026-07-30). A charm was a trinket you
+   bolted to a machine; a card is something the room deals you, and that deal
+   is the fiction the rest of the run hangs off now. Every tuned NUMBER
+   survived the swap intact — the symbol ladder, the reel-weight targets and
+   the compounding engine are the same values the 2M-spin simulation was sized
+   against. Only the fiction moved.
 
-   The old set was 12 charms that each arrived finished — WAX SEAL doubled
-   candles outright, and once you had it that symbol was done forever. You
-   bought a thing, the number went up, and there was nothing further to want
-   from it. So every value here is cut, and the difference is sold back to you
-   in stages: a symbol you commit to climbs I -> II -> III instead of maxing in
-   one purchase, and pairs of finished lines FUSE into something neither half
-   could do alone.
+   Every effect is read through buff() / buffMult() / buffRoom() at the point
+   of use, so adding a card here is the only edit needed.
 
-   Fields the rest of the game reads (see buff/buffRoom):
+   Effect fields:
      sym{id}      extra multiple of that symbol's pay        (0.45 = +45%)
+     symWeight{}  tilts the reel toward — or away from — a symbol
      pat{ID}      flat add to that pattern's multiplier
-     all          extra multiple on every win
+     all          extra multiple on every win (ADDITIVE with the rest)
+     mult         MULTIPLIES every win — the scaling engine, see buffMult
      spins        extra spins per night
-     head         coins handed to you at the start of a night
-     cloverWeight tilts the reel toward clovers
-     wild         clovers substitute for any symbol
-     power / dread                                           room-wide
+     head         coins handed over at the start of a night
      spinCost     knocks coins off the price of a spin (floors at 1)
-     timer        extra seconds before the collector breaks in
+     timer        extra seconds before the collector breaks the door
      clovers      clovers handed over per night
+     cloverWeight tilts the reel toward clovers
+     cloverFloor  clovers pay from one cell fewer
+     cloverCoins  coins per clover held, once a night
+     perClover    all-wins bonus per clover held (perCloverMax caps it)
+     wild         clovers count as any symbol
+     power        the fuse never blows again                     room-wide
+     dread        scales how fast the room turns on you          room-wide
 
-   `needs`  — hidden from every pool until those charms are owned. This is what
-              makes the tiers a ladder instead of a lottery.
-   `stack`  — may be taken more than once; effects add up.
-   `tier`   — display only, so a card can say where on the ladder it sits. */
+   Structure fields:
+     needs   hidden from every pool until those cards are owned. This is what
+             makes the deck a LADDER instead of a lottery.
+     stack   may be drawn again; effects add up, capped at STACK_CAP.
+     repeat  never leaves the pool; the escalating price is the only limit.
+     engine  a repeatable multiplier. The shop ALWAYS stocks one, because the
+             quota is exponential and additive income cannot race an
+             exponential — a run that is simply never offered compounding
+             starves out around night six no matter how well it is played.
+     rev     this is the REVERSED face. Reversed cards are never for sale; they
+             are what the room deals you at the door, and most of them charge
+             something real for what they hand over.
+     pow     0..3, how loudly the card burns on the rack (see cardFX). */
 
-/* Symbol ladders. Generated from one table because sixteen near-identical
-   hand-written entries is where typos live — and because keeping the tier
-   numbers in ONE place is the only way the curve stays honest. Tier I is a
-   taste, II is the commitment, III is a real investment gated behind both. */
-const _SYM_LADDER = [
-  /* symbol,     I name,          II name,          III name,        base cost */
-  ['candle',    'TALLOW STUB',   'VIGIL WAX',      'THE LONG WAKE',   34],
-  ['moth',      'MOTH DUST',     'LAMPFEEDER',     'THE SWARM',       40],
-  ['eye',       'GLASS EYE',     'SIXTH SENSE',    'THE WATCHFUL',    52],
-  ['spider',    'SILK KNOT',     'WEAVER',         'BROODMOTHER',     66],
-  ['coffin',    'COFFIN NAIL',   'PALL BEARER',    'THE PROCESSION',  80],
-  ['clover',    'PRESSED CLOVER','GREEN SAINT',    'FOUR-LEAF CROWN', 96],
-  ['skull',     'BONE MEAL',     'OSSUARY',        'THE CHARNEL',    120],
-  ['pentagram', 'CHALK MARK',    'SIGIL WORK',     'THE COVENANT',   150],
+/* ---- MINOR ARCANA -------------------------------------------------------
+   Eight suits, one per reel symbol, three ranks each. This is the old symbol
+   ladder with the naming moved into the deck: an Ace is a taste, a Seven is
+   the commitment, a King is a real investment gated behind both. Generated
+   from one table because twenty-four near-identical hand-written entries is
+   exactly where typos live, and because keeping the tier numbers in ONE place
+   is the only way the curve stays honest. */
+const SUITS = [
+  /* symbol,      suit,        base cost */
+  ['candle',    'CANDLES',      34],
+  ['moth',      'MOTHS',        40],
+  ['eye',       'EYES',         52],
+  ['spider',    'WEBS',         66],
+  ['coffin',    'COFFINS',      80],
+  ['clover',    'CLOVERS',      96],
+  ['skull',     'SKULLS',      120],
+  ['pentagram', 'SIGILS',      150],
 ];
-/* The fourth column is a TARGET reel weight, not an amount to add. Line odds go
+/* The last column is a TARGET reel weight, not an amount to add. Line odds go
    as p^3..p^5, so adding weight in proportion to what a symbol already has
-   compounds violently for common ones (candles hit ~7x base in the sim) while
-   still leaving rare ones dead. Pulling each symbol UP TOWARD a floor instead
-   means the commons — already everywhere — gain nothing from it and stay a pure
-   percentage play, while the rare, high-paying end finally gets enough presence
-   to line up at all. Reel weights for reference: candle 34 ... pentagram 3. */
-const _SYM_TIERS = [
-  /* add,  costMult, tier, target weight */
-  [0.45, 1.00, 'I',    0],
-  [0.70, 1.85, 'II',   9],
-  [1.10, 3.30, 'III', 18],
+   compounds violently for the common ones (candles hit ~7x base in the sim)
+   while still leaving the rare ones dead. Pulling each symbol UP TOWARD a
+   floor instead means the commons — already everywhere — gain nothing from it
+   and stay a pure percentage play, while the rare, high-paying end finally
+   gets enough presence to line up at all. Reel weights: candle 34 ...
+   pentagram 3. */
+const RANKS = [
+  /* rank,   pay add, cost x, tier, target weight */
+  ['ACE',     0.45,   1.00,   'I',    0],
+  ['SEVEN',   0.70,   1.85,   'II',   9],
+  ['KING',    1.10,   3.30,   'III', 18],
 ];
-const _symCharms = [];
-for (const [sym, n1, n2, n3, base] of _SYM_LADDER) {
-  const names = [n1, n2, n3];
+const _minor = [];
+for (const [sym, suit, base] of SUITS) {
   const S = SYMBOLS.find(s => s.id === sym);
   const pretty = sym[0].toUpperCase() + sym.slice(1) + 's';
-  for (let t = 0; t < 3; t++) {
-    const [add, cm, tier, targetW] = _SYM_TIERS[t];
+  RANKS.forEach(([rank, add, cm, tier, targetW], t) => {
     const wAdd = Math.max(0, targetW - S.w);
-    _symCharms.push({
+    _minor.push({
       id: sym + '_' + (t + 1),
-      name: names[t],
-      kind: 'PAYOUT', tier,
+      name: rank + ' OF ' + suit,
+      kind: 'MINOR', suit: sym, rank, tier, pow: t,
       cost: Math.round(base * cm),
       desc: pretty + ' pay +' + Math.round(add * 100) + '%'
             + (wAdd ? ', and land more often.' : '.'),
@@ -62296,282 +62306,218 @@ for (const [sym, n1, n2, n3, base] of _SYM_LADDER) {
       symWeight: wAdd ? { [sym]: wAdd } : null,
       needs: t === 0 ? null : [sym + '_' + t],
     });
-  }
+  });
 }
 
-const CHARMS = [
-  ..._symCharms,
+/* ---- MAJOR ARCANA -------------------------------------------------------
+   Twenty-two cards, each with two faces. UPRIGHT is what gets dealt onto the
+   tray with a price on it. REVERSED is stronger and only ever comes from the
+   room, at the door, for nothing.
 
-  /* ---- PATTERN. Small flat adds; the big multipliers are already on the
-     board, so these tilt which shape you want rather than replacing it. ---- */
-  { id: 'straightedge', name: 'STRAIGHT EDGE', kind: 'PATTERN', tier: 'I', cost: 48,
-    desc: 'HOR +0.5.', pat: { HOR: 0.5 } },
-  { id: 'longarm',   name: 'LONG ARM',       kind: 'PATTERN', tier: 'II', cost: 92,
-    desc: 'HOR-L +1.0, HOR-XL +1.0.', pat: { 'HOR-L': 1, 'HOR-XL': 1 }, needs: ['straightedge'] },
-  { id: 'fullspan',  name: 'FULL SPAN',      kind: 'PATTERN', tier: 'III', cost: 170,
-    desc: 'HOR-XL +2.5.', pat: { 'HOR-XL': 2.5 }, needs: ['longarm'] },
-  { id: 'crookedeye', name: 'CROOKED EYE',   kind: 'PATTERN', tier: 'I', cost: 55,
-    desc: 'DIAG +0.8.', pat: { DIAG: 0.8 } },
-  { id: 'serpent',   name: 'SERPENT',        kind: 'PATTERN', tier: 'II', cost: 104,
-    desc: 'ZIG +1.5, ZAG +1.5.', pat: { ZIG: 1.5, ZAG: 1.5 }, needs: ['crookedeye'] },
-  { id: 'highlow',   name: 'HIGH AND LOW',   kind: 'PATTERN', tier: 'II', cost: 118,
-    desc: 'ABOVE +2.0, BELOW +2.0.', pat: { ABOVE: 2, BELOW: 2 } },
-  { id: 'thirdeye',  name: 'THIRD EYE',      kind: 'PATTERN', tier: 'III', cost: 165,
-    desc: 'EYE +3.0.', pat: { EYE: 3 }, needs: ['crookedeye'] },
+   That split replaces the old RITE / CURSE divide and fixes what was wrong
+   with it: the free card used to be pure upside, which made the tribute a
+   formality once you had seen the list. A reversed card gives you something
+   no upright card can match and takes spins, float, time, dread or the
+   commons that pay your steady wins in exchange. You take it or you don't.
 
-  /* ---- TEMPO. Time and float. Nerfed hard from the old +3 spins / 40 coins
-     because both were auto-buys — they now come in ones and twos. ---- */
-  { id: 'onemore',   name: 'ONE MORE',       kind: 'TEMPO', tier: 'I', cost: 62,
-    desc: '+1 spin every night.', spins: 1, stack: true },
-  { id: 'nightowl',  name: 'NIGHT OWL',      kind: 'TEMPO', tier: 'II', cost: 128,
-    desc: '+2 more spins every night.', spins: 2, needs: ['onemore'] },
-  { id: 'deeppocket', name: 'DEEP POCKETS',  kind: 'TEMPO', tier: 'I', cost: 54,
-    desc: 'Start each night with 15 coins.', head: 15, stack: true },
-  { id: 'shortchange', name: 'SHORT CHANGE', kind: 'TEMPO', tier: 'II', cost: 96,
-    desc: 'Spins cost 1 less.', spinCost: 1 },
-  { id: 'gleaner',   name: 'GLEANER',        kind: 'TEMPO', tier: 'I', cost: 70,
-    desc: '+1 clover every night.', clovers: 1, stack: true },
+   `up` and `rev` are the two faces; the id, numeral and name are shared. */
+const MAJORS = [
+  { id: 'fool', n: '0', name: 'THE FOOL',
+    up:  { cost: 210, desc: 'Clovers count as ANY symbol.',
+           wild: true, needs: ['clover_2'] },
+    rev: { desc: 'Clovers count as ANY symbol and all wins x1.25. Two fewer spins every night.',
+           wild: true, mult: 1.25, spins: -2 } },
 
-  /* ---- LUCK. Clovers used to be a reroll token and nothing else — you sat on
-     a pile of them with no reason to want more, and the "each clover nudges the
-     tray toward rares" effect was invisible so it may as well not have existed.
-     These make a held clover worth something on every single spin, which turns
-     the pile into a resource you actually weigh spending. ---- */
-  { id: 'foundluck', name: 'FOUND LUCK',     kind: 'LUCK', tier: 'I', cost: 74,
-    desc: 'All wins +1% for each clover you hold (max +15%).', perClover: 0.01, perCloverMax: 0.15 },
-  { id: 'greenfingers', name: 'GREEN FINGERS', kind: 'LUCK', tier: 'II', cost: 142,
-    desc: 'A further +1.5% per clover (max +30% total).',
-    perClover: 0.015, perCloverMax: 0.15, needs: ['foundluck'] },
-  { id: 'cloverbank', name: 'CLOVER BANK',   kind: 'LUCK', tier: 'I', cost: 86,
-    desc: 'Each night, gain 3 coins per clover held.', cloverCoins: 3 },
-  { id: 'fourleaf',  name: 'FOUR-LEAF EYE',  kind: 'LUCK', tier: 'II', cost: 120,
-    desc: 'Clovers land more often, and pay out from 2 on the grid.',
-    cloverWeight: 4, cloverFloor: 1 },
+  { id: 'magician', n: 'I', name: 'THE MAGICIAN',
+    up:  { cost: 260, desc: 'All wins x1.45. Take it again and again — each costs more.',
+           mult: 1.45, repeat: true, costGrow: 1.52, engine: true, needs: ['maj_wheel'] },
+    rev: { desc: 'All wins x1.55, and dread climbs. Dealt again and again.',
+           mult: 1.55, dread: 0.30, repeat: true, engine: true } },
 
-  /* ---- NERVE. Keeping the room off your back. ---- */
-  { id: 'ironnerve', name: 'IRON NERVE',     kind: 'NERVE', tier: 'I', cost: 58,
-    desc: 'Dread rises 25% slower.', dread: -0.25 },
-  { id: 'deadcalm',  name: 'DEAD CALM',      kind: 'NERVE', tier: 'II', cost: 112,
-    desc: 'Dread rises a further 35% slower.', dread: -0.35, needs: ['ironnerve'] },
-  { id: 'fusetape',  name: 'FUSE TAPE',      kind: 'NERVE', tier: 'II', cost: 88,
-    desc: 'The power never cuts again.', power: true },
-  { id: 'stalltime', name: 'STALLING',       kind: 'NERVE', tier: 'I', cost: 66,
-    desc: '+8 seconds before it breaks the door.', timer: 8, stack: true },
+  { id: 'priestess', n: 'II', name: 'THE HIGH PRIESTESS',
+    up:  { cost: 220, desc: 'Eyes pay +90%, land far more often, and EYE pays +4.0.',
+           sym: { eye: 0.9 }, symWeight: { eye: 8 }, pat: { EYE: 4 }, needs: ['eye_2'] },
+    rev: { desc: 'Eyes and spiders pay +60%.',
+           sym: { eye: 0.6, spider: 0.6 }, stack: true } },
 
-  /* ---- COMPOUND. The scaling engine, and the reason a run can go long.
-     Everything else here is a ONE-TIME ADDITIVE boost, and the quota is
-     exponential (x1.30 a night) — additive income cannot race an exponential,
-     so every run used to die around night 4 with a hard ceiling near 34k a
-     night against a night-30 quota of 141k. These are repeatable and
-     MULTIPLICATIVE: each copy multiplies every win, and each copy costs more
-     than the last. Buy rate is the whole game — 1.35x income against a 1.30x
-     quota means one purchase a night pulls slowly ahead, two runs away with
-     it, none and the room takes you. `repeat` = no stack cap, `costGrow` =
-     what the next copy costs. ---- */
-  { id: 'houserake', name: "THE HOUSE'S CUT", kind: 'COMPOUND', tier: '∞', cost: 70,
-    desc: 'All wins x1.30. Buy it again and again — each costs more.',
-    mult: 1.30, repeat: true, costGrow: 1.38 },
-  { id: 'deadmanshand', name: "DEAD MAN'S HAND", kind: 'COMPOUND', tier: '∞', cost: 260,
-    desc: 'All wins x1.45, and dread climbs. Repeatable.',
-    mult: 1.45, dread: 0.20, repeat: true, costGrow: 1.52, needs: ['houserake'] },
+  { id: 'empress', n: 'III', name: 'THE EMPRESS',
+    up:  { cost: 70, desc: '+1 clover every night.', clovers: 1, stack: true },
+    rev: { desc: '+3 clovers every night.', clovers: 3, stack: true } },
 
-  /* ---- GREED. Flat multipliers on everything, paid for in dread. ---- */
-  { id: 'greedcut',  name: 'GREED',          kind: 'GREED', tier: 'I', cost: 90,
-    desc: 'All wins +12%. Dread rises faster.', all: 0.12, dread: 0.35 },
-  { id: 'avarice',   name: 'AVARICE',        kind: 'GREED', tier: 'II', cost: 178,
-    desc: 'All wins +18% more. Dread rises faster still.',
-    all: 0.18, dread: 0.45, needs: ['greedcut'] },
+  { id: 'emperor', n: 'IV', name: 'THE EMPEROR',
+    up:  { cost: 48, desc: 'HOR +0.5.', pat: { HOR: 0.5 } },
+    rev: { desc: 'HOR, HOR-L and HOR-XL all +1.0.',
+           pat: { HOR: 1, 'HOR-L': 1, 'HOR-XL': 1 }, stack: true } },
 
-  /* ---- RITE. The end-of-night boon, and the only thing here you cannot buy.
-     A charm is a part you bolt to a machine; a RITE is something the room does
-     to you once, for the rest of the run. They are strictly stronger than what
-     the shop sells because they are never for sale — the tribute at the door
-     always offers exactly one, so surviving a night is worth something on its
-     own rather than just resetting the counter.
+  { id: 'hierophant', n: 'V', name: 'THE HIEROPHANT',
+    up:  { cost: 92, desc: 'HOR-L +1.0, HOR-XL +1.0.',
+           pat: { 'HOR-L': 1, 'HOR-XL': 1 }, needs: ['maj_emperor'] },
+    rev: { desc: 'HOR-XL +2.5.', pat: { 'HOR-XL': 2.5 } } },
 
-     `boon: true` is what keeps them out of the shop pool. Most stack up to
-     STACK_CAP so a long run can lean into one, and THE BARGAIN repeats without
-     limit because compounding is what lets a run outpace the quota. The shovel
-     part is deliberately NOT one of these: it is the escape, it is capped at
-     SHOVEL_PARTS, and it must never be stackable. ---- */
-  { id: 'rite_tithe',  name: 'THE TITHE',   kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Start every night with 40 coins.', head: 40, stack: true },
-  { id: 'rite_long',   name: 'THE LONG NIGHT', kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: '+2 spins every night.', spins: 2, stack: true },
-  { id: 'rite_ledger', name: 'THE LEDGER',  kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'All wins +20%.', all: 0.20, stack: true },
-  { id: 'rite_bargain', name: 'THE BARGAIN', kind: 'RITE', tier: '∞', cost: 0, boon: true,
-    desc: 'All wins x1.25, and dread climbs. Offered again and again.',
-    mult: 1.25, dread: 0.15, repeat: true },
-  { id: 'rite_greenrot', name: 'GREEN ROT', kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Clovers crowd the reels.', cloverWeight: 6, stack: true },
-  { id: 'rite_still',  name: 'STILLNESS',   kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Dread rises 30% slower, and +10s before it breaks in.',
-    dread: -0.30, timer: 10, stack: true },
-  { id: 'rite_famine', name: 'FAMINE',      kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Candles and moths grow scarcer for the rest of the run.',
-    symWeight: { candle: -12, moth: -10 }, stack: true },
-  { id: 'rite_cheap',  name: 'CHEAP SEAT',  kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Spins cost 1 less.', spinCost: 1 },
+  { id: 'lovers', n: 'VI', name: 'THE LOVERS',
+    up:  { cost: 165, desc: 'Candles and moths both pay +80% on top.',
+           sym: { candle: 0.8, moth: 0.8 }, needs: ['candle_2', 'moth_2'] },
+    rev: { desc: 'Skulls and coffins pay +70% and crowd the reels.',
+           sym: { skull: 0.7, coffin: 0.7 }, symWeight: { skull: 5, coffin: 5 }, stack: true } },
 
-  /* More RITEs, so the tribute stops repeating itself. Eight was small enough
-     that a long run saw the same three cards over and over. */
-  { id: 'rite_hoard',  name: 'THE HOARD',   kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Each night, gain 4 coins per clover held.', cloverCoins: 4, stack: true },
-  { id: 'rite_field',  name: 'FIELD OF GREEN', kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: '+3 clovers every night.', clovers: 3, stack: true },
-  { id: 'rite_sharp',  name: 'SHARP EYE',   kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Eyes and spiders pay +60%.', sym: { eye: 0.6, spider: 0.6 }, stack: true },
-  { id: 'rite_grave',  name: 'GRAVE PACT',  kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'Skulls and coffins pay +70% and crowd the reels.',
-    sym: { skull: 0.7, coffin: 0.7 }, symWeight: { skull: 5, coffin: 5 }, stack: true },
-  { id: 'rite_crossed', name: 'CROSSED LINES', kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'DIAG, ZIG and ZAG all +1.5.',
-    pat: { DIAG: 1.5, ZIG: 1.5, ZAG: 1.5 }, stack: true },
-  { id: 'rite_wide',   name: 'THE WIDE ROW', kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'HOR +1.0, HOR-L +1.0, HOR-XL +1.0.',
-    pat: { HOR: 1, 'HOR-L': 1, 'HOR-XL': 1 }, stack: true },
-  { id: 'rite_edges',  name: 'THE EDGES',   kind: 'RITE', tier: '◆', cost: 0, boon: true,
-    desc: 'ABOVE +3.0, BELOW +3.0, EYE +3.0.',
-    pat: { ABOVE: 3, BELOW: 3, EYE: 3 }, stack: true },
+  { id: 'chariot', n: 'VII', name: 'THE CHARIOT',
+    up:  { cost: 62, desc: '+1 spin every night.', spins: 1, stack: true },
+    rev: { desc: '+2 spins every night.', spins: 2, stack: true } },
 
-  /* ---- CURSE. Boons with teeth. Everything above is free upside, which makes
-     the tribute a formality once you've seen the list — these are the cards you
-     have to actually think about. Each one buys a multiplier nothing else in
-     the game can match and charges something real for it: spins, time, float,
-     dread, or the commons that pay your steady wins.
+  { id: 'strength', n: 'VIII', name: 'STRENGTH',
+    up:  { cost: 128, desc: '+2 more spins every night.', spins: 2, needs: ['maj_chariot'] },
+    rev: { desc: 'All wins x1.60. Two fewer spins every night.',
+           mult: 1.60, spins: -2, stack: true } },
 
-     They are boons, not charms, so they can never be shopped for — you only
-     ever meet one at the door, and you take it or you don't. ---- */
-  { id: 'curse_famished', name: 'FAMISHED', kind: 'CURSE', tier: '☠', cost: 0, boon: true,
-    desc: 'All wins x1.60. Two fewer spins every night.',
-    mult: 1.60, spins: -2, stack: true },
-  { id: 'curse_toll',  name: 'THE TOLL',   kind: 'CURSE', tier: '☠', cost: 0, boon: true,
-    desc: 'All wins x1.70. Spins cost 2 more.', mult: 1.70, spinCost: -2 },
-  { id: 'curse_hollow', name: 'HOLLOW HANDS', kind: 'CURSE', tier: '☠', cost: 0, boon: true,
-    desc: 'All wins x1.80. Start each night 30 coins down.',
-    mult: 1.80, head: -30, stack: true },
-  { id: 'curse_haste', name: 'THE HASTE',  kind: 'CURSE', tier: '☠', cost: 0, boon: true,
-    desc: 'All wins x1.55. Twelve seconds less before it breaks in.',
-    mult: 1.55, timer: -12, stack: true },
-  { id: 'curse_bleed', name: 'THE BLEEDING', kind: 'CURSE', tier: '☠', cost: 0, boon: true,
-    desc: 'All wins +45%. Dread rises much faster.',
-    all: 0.45, dread: 0.55, stack: true },
-  { id: 'curse_blind', name: 'BLIND FAITH', kind: 'CURSE', tier: '☠', cost: 0, boon: true,
-    desc: 'Pentagrams pay +200% and crowd the reels. Candles, moths and eyes all but vanish.',
-    sym: { pentagram: 2.0 },
-    symWeight: { pentagram: 8, candle: -16, moth: -14, eye: -6 } },
-  { id: 'curse_gamble', name: "THE GAMBLER'S DEBT", kind: 'CURSE', tier: '∞', cost: 0, boon: true,
-    desc: 'All wins x1.40, and dread climbs. Offered again and again.',
-    mult: 1.40, dread: 0.28, repeat: true },
+  { id: 'hermit', n: 'IX', name: 'THE HERMIT',
+    up:  { cost: 58, desc: 'Dread rises 25% slower, and +8s before it breaks in.',
+           dread: -0.25, timer: 8 },
+    rev: { desc: 'Dread rises 30% slower, and +10s before it breaks in.',
+           dread: -0.30, timer: 10, stack: true } },
 
-  /* ---- CULL. The other half of the reel-weight lever. Every charm above ADDS
-     presence to a symbol; these take it away. Because a symbol's odds are its
-     share of the total weight, thinning the commons lifts everything else
-     without touching it — which is the only way to make the rare, high-paying
-     end of the board show up often enough to matter.
+  { id: 'wheel', n: 'X', name: 'WHEEL OF FORTUNE',
+    up:  { cost: 70, desc: 'All wins x1.30. Take it again and again — each costs more.',
+           mult: 1.30, repeat: true, costGrow: 1.38, engine: true },
+    rev: { desc: 'All wins x1.25, and dread climbs. Dealt again and again.',
+           mult: 1.25, dread: 0.15, repeat: true, engine: true } },
 
-     The trade is real. Candles and moths are what pay your small, steady wins,
-     so a run that culls them is betting the night on landing the top end and
-     starving if it doesn't. That is the decision these exist to create. ---- */
-  { id: 'snuffed',   name: 'SNUFFED',     kind: 'CULL', tier: 'I', cost: 84,
-    desc: 'Candles land far less often.', symWeight: { candle: -18 } },
-  { id: 'mothbane',  name: 'MOTHBANE',    kind: 'CULL', tier: 'I', cost: 92,
-    desc: 'Moths land far less often.', symWeight: { moth: -14 } },
-  { id: 'sweptclean', name: 'SWEPT CLEAN', kind: 'CULL', tier: 'II', cost: 175,
-    desc: 'Candles and moths grow scarcer still.',
-    symWeight: { candle: -10, moth: -8 }, needs: ['snuffed', 'mothbane'] },
-  { id: 'thintheherd', name: 'THIN THE HERD', kind: 'CULL', tier: 'II', cost: 190,
-    desc: 'Eyes and spiders land less often, and all wins +8%.',
-    symWeight: { eye: -8, spider: -4 }, all: 0.08, needs: ['snuffed'] },
+  { id: 'justice', n: 'XI', name: 'JUSTICE',
+    up:  { cost: 96, desc: 'Spins cost 1 less.', spinCost: 1 },
+    rev: { desc: 'All wins x1.70. Spins cost 2 more.', mult: 1.70, spinCost: -2 } },
 
-  /* ---- FUSED. Two finished lines welded into one thing neither could do.
-     These are the reason to go deep on a pair rather than wide on everything,
-     and the `needs` gate means they can only ever show up once you have. ---- */
-  { id: 'wildclover', name: 'WILD CLOVER',   kind: 'FUSED', tier: '★', cost: 210,
-    desc: 'Clovers count as ANY symbol.', wild: true, needs: ['clover_2'] },
-  { id: 'nightvigil', name: 'NIGHT VIGIL',   kind: 'FUSED', tier: '★', cost: 165,
-    desc: 'Candles and moths both pay +80% on top.',
-    sym: { candle: 0.8, moth: 0.8 }, needs: ['candle_2', 'moth_2'] },
-  /* The fused charms that feed RARE symbols carry reel weight as well as pay.
-     Without it they were traps: BONE ORCHARD is five charms and 800 coins deep
-     and moved the average by half a coin a spin, because skulls and coffins
-     still almost never lined up. Pay alone cannot rescue a symbol you never
-     see — same lesson as the ladder tiers above. */
-  { id: 'boneorchard', name: 'BONE ORCHARD', kind: 'FUSED', tier: '★', cost: 235,
-    desc: 'Skulls and coffins pay +100% and crowd the reels.',
-    sym: { skull: 1.0, coffin: 1.0 }, symWeight: { skull: 7, coffin: 7 },
-    needs: ['skull_2', 'coffin_2'] },
-  { id: 'allseeing', name: 'ALL-SEEING',     kind: 'FUSED', tier: '★', cost: 220,
-    desc: 'Eyes pay +90%, land far more often, and EYE pays +4.0.',
-    sym: { eye: 0.9 }, symWeight: { eye: 8 }, pat: { EYE: 4 },
-    needs: ['eye_2', 'thirdeye'] },
-  { id: 'blackmass', name: 'BLACK MASS',     kind: 'FUSED', tier: '★', cost: 290,
-    desc: 'Pentagrams pay +150%, appear far more often, and all wins +10%.',
-    sym: { pentagram: 1.5 }, symWeight: { pentagram: 9 }, all: 0.10,
-    needs: ['pentagram_2'] },
-  { id: 'spinnersluck', name: "SPINNER'S LUCK", kind: 'FUSED', tier: '★', cost: 195,
-    desc: '+2 spins, and clovers land far more often.',
-    spins: 2, cloverWeight: 7, needs: ['clover_1', 'onemore'] },
+  { id: 'hanged', n: 'XII', name: 'THE HANGED MAN',
+    up:  { cost: 74, desc: 'All wins +1% per clover held (max +15%), and 3 coins a night per clover.',
+           perClover: 0.01, perCloverMax: 0.15, cloverCoins: 3 },
+    rev: { desc: 'All wins x1.80. Start each night 30 coins down.',
+           mult: 1.80, head: -30, stack: true } },
+
+  { id: 'death', n: 'XIII', name: 'DEATH',
+    up:  { cost: 235, desc: 'Skulls and coffins pay +100% and crowd the reels.',
+           sym: { skull: 1.0, coffin: 1.0 }, symWeight: { skull: 7, coffin: 7 },
+           needs: ['skull_2', 'coffin_2'] },
+    rev: { desc: 'All wins +45%. Dread rises much faster.',
+           all: 0.45, dread: 0.55, stack: true } },
+
+  /* Temperance is restraint, so upright it THINS the reels rather than filling
+     them. Because a symbol's odds are its share of the total weight, taking
+     presence off the commons lifts everything else without touching it — the
+     only lever in the deck that makes the rare, high-paying end show up often
+     enough to matter. The trade is real: candles and moths are what pay your
+     small steady wins, so a run that culls them is betting the night on
+     landing the top end and starving if it doesn't. */
+  { id: 'temperance', n: 'XIV', name: 'TEMPERANCE',
+    up:  { cost: 84, desc: 'Candles and moths land far less often.',
+           symWeight: { candle: -18, moth: -14 } },
+    rev: { desc: 'Eyes and spiders land less often, and all wins +8%.',
+           symWeight: { eye: -8, spider: -4 }, all: 0.08 } },
+
+  { id: 'devil', n: 'XV', name: 'THE DEVIL',
+    up:  { cost: 290, desc: 'Pentagrams pay +150%, appear far more often, and all wins +10%.',
+           sym: { pentagram: 1.5 }, symWeight: { pentagram: 9 }, all: 0.10,
+           needs: ['pentagram_2'] },
+    rev: { desc: 'All wins x1.40, and dread climbs. Dealt again and again.',
+           mult: 1.40, dread: 0.28, repeat: true, engine: true } },
+
+  { id: 'tower', n: 'XVI', name: 'THE TOWER',
+    up:  { cost: 88, desc: 'The power never cuts again.', power: true },
+    rev: { desc: 'Pentagrams pay +200% and crowd the reels. Candles, moths and eyes all but vanish.',
+           sym: { pentagram: 2.0 },
+           symWeight: { pentagram: 8, candle: -16, moth: -14, eye: -6 } } },
+
+  { id: 'star', n: 'XVII', name: 'THE STAR',
+    up:  { cost: 120, desc: 'Clovers land more often, and pay out from 2 on the grid.',
+           cloverWeight: 4, cloverFloor: 1 },
+    rev: { desc: 'Clovers crowd the reels.', cloverWeight: 6, stack: true } },
+
+  { id: 'moon', n: 'XVIII', name: 'THE MOON',
+    up:  { cost: 55, desc: 'DIAG, ZIG and ZAG all +0.8.',
+           pat: { DIAG: 0.8, ZIG: 0.8, ZAG: 0.8 } },
+    rev: { desc: 'DIAG, ZIG and ZAG all +1.5.',
+           pat: { DIAG: 1.5, ZIG: 1.5, ZAG: 1.5 }, stack: true } },
+
+  { id: 'sun', n: 'XIX', name: 'THE SUN',
+    up:  { cost: 54, desc: 'Start each night with 15 coins.', head: 15, stack: true },
+    rev: { desc: 'Start every night with 40 coins.', head: 40, stack: true } },
+
+  { id: 'judgement', n: 'XX', name: 'JUDGEMENT',
+    up:  { cost: 118, desc: 'ABOVE +2.0, BELOW +2.0.', pat: { ABOVE: 2, BELOW: 2 } },
+    rev: { desc: 'ABOVE +3.0, BELOW +3.0, EYE +3.0.',
+           pat: { ABOVE: 3, BELOW: 3, EYE: 3 }, stack: true } },
+
+  { id: 'world', n: 'XXI', name: 'THE WORLD',
+    up:  { cost: 90, desc: 'All wins +12%. Dread rises faster.', all: 0.12, dread: 0.35 },
+    rev: { desc: 'All wins +20%.', all: 0.20, stack: true } },
 ];
 
-const charmById = id => CHARMS.find(c => c.id === id);
+const _major = [];
+for (const M of MAJORS) {
+  const shared = { arcana: M.id, num: M.n, tier: M.n, name: M.name };
+  _major.push({ ...shared, ...M.up,
+                id: 'maj_' + M.id, kind: 'MAJOR', pow: 2 });
+  _major.push({ ...shared, ...M.rev,
+                id: 'maj_' + M.id + '_r', kind: 'REVERSED',
+                rev: true, boon: true, cost: 0, pow: 3 });
+}
 
-/* a physical token on the rack for every charm taken — the shelf fills up
-   as the run goes on, so progress is visible in the room, not just the HUD */
-function spawnCharmToken(mach, id, idx) {
-  const c = charmById(id);
+const TAROT = [..._minor, ..._major];
+
+const cardById = id => TAROT.find(c => c.id === id);
+
+/* every card you take is stood up on the rack — the shelves fill as the run
+   goes on, so your hand is readable from across the room and not just in the
+   HUD. Reversed ones are the upside-down ones. */
+function spawnCardToken(mach, id, idx) {
+  const c = cardById(id);
   if (!c) return;
-  /* the rack shows the actual figurine you bought, at three-quarter size */
-  const m = charmFigure(c);
-  /* The rack is a five-shelf unit now, not a flat tray, so tokens fill it
-     shelf by shelf from the bottom and wrap round when it's full — twenty on
-     display, which is about as deep as a run gets. Smaller than the old tray
-     scale because four to a shelf on a 0.5m board is a tighter fit. */
-  m.scale.setScalar(0.62);
+  const m = cardMesh(c);
+  /* The rack is a five-shelf unit, so cards fill it shelf by shelf from the
+     bottom and wrap round when it's full — twenty on display, about as deep as
+     a run gets. CARD_H is sized to the 0.233 m shelf gap, so no scaling here:
+     the card is already exactly as big as the shelf allows. */
   const perShelf = RACK_COLS;
   const shelf = ((idx / perShelf) | 0) % SHELF_Y.length;
   const col = idx % perShelf;
   m.position.set(mach.rackX - 0.19 + col * 0.127,
                  SHELF_Y[shelf] * RACK_H + 0.012,
                  mach.tableZ + 0.06);
-  m.rotation.y = rand() * 0.8 - 0.4;
+  /* barely any yaw — a face you cannot read is not worth painting */
+  m.rotation.y = rand() * 0.16 - 0.08;
   scene.add(m);
   mach.tokens.push(m);
 }
-function clearCharmTokens() {
+function clearCardTokens() {
   for (const mm of MACHINES) {
     for (const t of mm.tokens) scene.remove(t);
     mm.tokens.length = 0;
   }
 }
 
-function hasCharm(id) { return MACHINES.some(m => m.charms.includes(id)); }
-/* how many copies you hold — stackable charms can be taken again */
-function charmCount(id) {
+function hasCard(id) { return MACHINES.some(m => m.cards.includes(id)); }
+/* how many copies you hold — stackable cards can be dealt again */
+function cardCount(id) {
   let n = 0;
-  for (const m of MACHINES) for (const c of m.charms) if (c === id) n++;
+  for (const m of MACHINES) for (const c of m.cards) if (c === id) n++;
   return n;
 }
-/* One gate for every place a charm can be offered. A charm is available when
+/* One gate for every place a card can be offered. A card is available when
    it isn't already taken (unless it stacks) AND its prerequisites are all
    owned — that `needs` check is what turns the list into a ladder: tier II
    simply does not exist for you until tier I is on the rack. Cap the stacks so
    a run cannot become nothing but ONE MORE. */
 const STACK_CAP = 3;
-function charmAvailable(c) {
+function cardAvailable(c) {
   if (!c) return false;
-  /* `repeat` charms never leave the pool — they are the run's scaling engine
+  /* `repeat` cards never leave the pool — they are the run's scaling engine
      and the escalating price is what limits them, not a stack cap. */
-  if (!c.repeat && (c.stack ? charmCount(c.id) >= STACK_CAP : hasCharm(c.id))) return false;
-  if (c.needs && !c.needs.every(hasCharm)) return false;
+  if (!c.repeat && (c.stack ? cardCount(c.id) >= STACK_CAP : hasCard(c.id))) return false;
+  if (c.needs && !c.needs.every(hasCard)) return false;
   return true;
 }
 /* Two pools off one gate. The shop never stocks a RITE — they are the reward
    for getting through a night, and putting a price on one would turn it into
-   just another charm. */
-const charmPool  = () => CHARMS.filter(c => !c.boon && charmAvailable(c));
-const boonPool   = () => CHARMS.filter(c =>  c.boon && charmAvailable(c));
+   just another card. */
+const cardPool  = () => TAROT.filter(c => !c.boon && cardAvailable(c));
+const boonPool   = () => TAROT.filter(c =>  c.boon && cardAvailable(c));
 
 const el = {
   coins: document.getElementById('coins'),
@@ -62614,12 +62560,12 @@ function syncHUD() {
   }
   [...el.pips.children].forEach((p, i) => p.classList.toggle('used', i >= game.spins));
 
-  const mine = myMachine ? myMachine.charms : [];
+  const mine = myMachine ? myMachine.cards : [];
   if (el.buffs.childElementCount !== mine.length) {
     el.buffs.innerHTML = '';
     for (const id of mine) {
       const s = document.createElement('span');
-      s.textContent = charmById(id).name;
+      s.textContent = cardById(id).name;
       el.buffs.appendChild(s);
     }
   }
@@ -62734,9 +62680,9 @@ function resolveSpin(m) {
   let best = null;
 
   const wild = buff(m, 'wild');
-  /* LUCK charms fold into the same all-wins multiplier, so a clover hoard is
+  /* perClover cards fold into the same all-wins multiplier, so a clover hoard is
      worth something on every line rather than sitting unspent as reroll fuel */
-  /* additive charms raise the base, COMPOUND charms multiply the lot */
+  /* additive cards raise the base, `mult` cards multiply the lot */
   const allBonus = (1 + buff(m, 'all') + buff(m, 'perClover')) * buffMult(m);
 
   for (const p of PATTERNS) {
@@ -62877,7 +62823,7 @@ const shop = { open: false, items: [], group: null };
 
 function openShop() {
   closeShop();
-  const pool = charmPool();
+  const pool = cardPool();
   if (!pool.length) { finishNight(); return; }
 
   /* clovers are luck: each one nudges the tray toward the rarer figures */
@@ -62888,11 +62834,13 @@ function openShop() {
      a simulated run playing perfectly still starved out around night 6, having
      simply never been offered the thing it needed. One guaranteed slot keeps
      the path open; the escalating price is what keeps it honest. */
-  const comp = pool.filter(c => c.kind === 'COMPOUND');
+  const comp = pool.filter(c => c.engine);
   if (comp.length) picks.push(comp[(Math.random() * comp.length) | 0]);
   while (picks.length < Math.min(4, pool.length)) {
+    /* the expensive end of the deck needs a roll to make the tray, and clovers
+       are what improve that roll — the only reason `luck` exists */
     const weighted = pool.filter(c =>
-      !picks.includes(c) && (c.kind !== 'RARE' || Math.random() < 0.25 + luck));
+      !picks.includes(c) && (c.cost < 150 || Math.random() < 0.25 + luck));
     const from = weighted.length ? weighted : pool.filter(c => !picks.includes(c));
     picks.push(from[(Math.random() * from.length) | 0]);
   }
@@ -62908,8 +62856,16 @@ function openShop() {
   });
 
   shop.items = picks.map((c, i) => {
-    const fig = charmFigure(c);
-    fig.scale.setScalar(1.15);
+    const fig = cardMesh(c);
+    /* bigger than on the rack — the tray is the dark end of the room and you
+       are choosing off it, so the face has to carry from the doorway */
+    fig.scale.setScalar(1.5);
+    /* TURNED ROUND. A card's face is on its +Z side, which is right for the
+       rack (you read that standing out in the room looking back at the wall)
+       and exactly wrong here: the tray comes through the door in the south
+       wall and you read it looking the other way, so an unrotated card shows
+       you nothing but its back. Same reason the price tag is flipped below. */
+    fig.rotation.y = Math.PI;
     fig.position.set(-0.48 + i * 0.32, 0.03, 0);
     g.add(fig);
     const tag = new THREE.Mesh(
@@ -62923,7 +62879,7 @@ function openShop() {
        overlap them and hide the very thing you're choosing */
     tag.position.set(-0.48 + i * 0.32, 0.40, -0.04);
     g.add(tag);
-    return { charm: c, mesh: fig, tag, world: new THREE.Vector3() };
+    return { card: c, mesh: fig, tag, world: new THREE.Vector3() };
   });
 
   /* the tray gets its own light, so the figurines are lit rather than glowing */
@@ -62945,215 +62901,394 @@ function closeShop() {
   shop.group = null; shop.items = []; shop.open = false;
 }
 
-/* ---- one hand-built figurine per charm ----------------------------------
-   Each is a distinct silhouette AND a distinct colour, so they can be told
-   apart across a dim room without reading a tag. All sit on a common plinth
-   so they line up on the tray. */
+/* ---- the cards themselves -----------------------------------------------
+   A card is one thin slab with a painted face. The art is placeholder and
+   drawn at runtime, same rule as the reels and the wall boards — real faces
+   arrive later as tarot_<id>.png and cardFaceTex is the only thing that has
+   to change to take them.
 
-/* Keep emissive LOW. These are small objects and the composite bloom will
-   happily turn a glowing 6cm sphere into a featureless white blob — the
-   shape has to come from being lit, not from self-illumination. */
-function figMat(hex, glow = 0.45) {
-  const m = new THREE.MeshLambertMaterial({
-    color: hex, emissive: hex, emissiveIntensity: glow * 0.30
-  });
-  psx(m); return m;
-}
-function dullMat(hex) {
-  const m = new THREE.MeshLambertMaterial({ color: hex }); psx(m); return m;
-}
-function part(grp, geo, mat, x, y, z, rx, ry, rz) {
-  const m = new THREE.Mesh(geo, mat);
-  m.position.set(x, y, z || 0);
-  m.rotation.set(rx || 0, ry || 0, rz || 0);
-  grp.add(m);
-  return m;
-}
+   TEXT PANEL RULE, learned the hard way on the wall boards: a canvas carrying
+   glyphs must be LINEAR filtered with mipmaps, never nearest, or the
+   downsample shreds every letter. smooth:true, always.
 
-const FIGURES = {
-  /* a guttered candle stub, still lit */
-  waxseal(g) {
-    part(g, new THREE.CylinderGeometry(0.036, 0.044, 0.10, 8), dullMat(0xdccfb4), 0, 0.08);
-    part(g, new THREE.CylinderGeometry(0.012, 0.020, 0.045, 6), dullMat(0xe0d0aa), 0.034, 0.062);
-    part(g, new THREE.ConeGeometry(0.024, 0.055, 7), figMat(0xffb43a, 1.1), 0, 0.157);
+   A REVERSED card is drawn upside down, because that is what reversed means.
+   One texture rotation, no second painting — and it means a glance at the rack
+   tells you which of your cards came out of the dark. */
+const CARD_W = 0.105, CARD_H = 0.178, CARD_T = 0.005;
+
+const _SYM_COLOR = {};
+for (const s of SYMBOLS) _SYM_COLOR[s.id] = parseInt(s.color.slice(1), 16);
+/* three kinds is the whole palette now: a suit card takes its symbol's colour,
+   an upright major is gilt, a reversed one is blood */
+const _KIND_COLOR = { MINOR: 0xd8b070, MAJOR: 0xffd257, REVERSED: 0xc0304a };
+const _KIND_INK   = { MINOR: '#d8b070', MAJOR: '#ffd257', REVERSED: '#e0455f' };
+const cardInk = c => (c.kind === 'MINOR' && c.suit && SYMBOLS.find(s => s.id === c.suit).color)
+                     || _KIND_INK[c.kind] || '#d8b070';
+/* the one-line label under a card's name — used by the face, the price tag on
+   the tray and the DOM spread, so all three always agree */
+const cardLabel = c => c.kind === 'REVERSED' ? 'REVERSED'
+                     : c.kind === 'MINOR'    ? 'MINOR ARCANA'
+                     : 'ARCANA';
+
+/* ---- glyph primitives. Stroke and fill are already set to the card's ink. */
+const _ring = (g, x, y, r, lw) => {
+  g.lineWidth = lw; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+};
+const _seg = (g, x1, y1, x2, y2, lw) => {
+  g.lineWidth = lw; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+};
+const _shape = (g, pts, fill, lw) => {
+  g.lineWidth = lw || 5; g.beginPath();
+  pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+  g.closePath(); fill ? g.fill() : g.stroke();
+};
+/* two arcs sharing their ends — the standard cheap crescent */
+const _crescent = (g, x, y, r, off) => {
+  g.beginPath();
+  g.arc(x, y, r, 1.9, 4.38);
+  g.arc(x + off, y, r, 4.38, 1.9, true);
+  g.closePath(); g.fill();
+};
+const _star = (g, x, y, r, pts) => {
+  g.beginPath();
+  for (let i = 0; i < pts * 2; i++) {
+    const a = i / (pts * 2) * Math.PI * 2 - Math.PI / 2;
+    const rr = i % 2 ? r * 0.40 : r;
+    i ? g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr)
+      : g.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  g.closePath(); g.fill();
+};
+
+/* ---- one glyph per arcana. Placeholder art: bold, silhouette-first, and
+   distinct in SHAPE rather than in detail — at card size on a rack across a
+   dark room, detail is the first thing the post stack eats. Each is handed the
+   panel centre and a radius. */
+const MAJOR_GLYPH = {
+  /* a figure mid-stride with a bindle on a staff */
+  fool(g, x, y, r) {
+    _ring(g, x - r * 0.10, y - r * 0.58, r * 0.19, 5);
+    _seg(g, x - r * 0.62, y + r * 0.80, x + r * 0.50, y - r * 0.40, 6);
+    _shape(g, [[x + r * 0.38, y - r * 0.34], [x + r * 0.74, y - r * 0.18],
+               [x + r * 0.40, y - r * 0.02]], true);
+    _seg(g, x - r * 0.10, y - r * 0.34, x - r * 0.10, y + r * 0.30, 6);
+    _seg(g, x - r * 0.10, y + r * 0.30, x - r * 0.44, y + r * 0.78, 6);
+    _seg(g, x - r * 0.10, y + r * 0.30, x + r * 0.22, y + r * 0.78, 6);
   },
-  /* moth, wings spread */
-  mothdust(g) {
-    const w = dullMat(0xc0b795);
-    part(g, new THREE.CylinderGeometry(0.013, 0.009, 0.10, 6), dullMat(0x6a5540), 0, 0.085);
+  /* a raised wand under the lemniscate */
+  magician(g, x, y, r) {
+    _seg(g, x, y - r * 0.10, x, y + r * 0.86, 7);
+    _seg(g, x - r * 0.34, y + r * 0.20, x + r * 0.34, y + r * 0.20, 6);
+    _ring(g, x - r * 0.27, y - r * 0.52, r * 0.25, 5);
+    _ring(g, x + r * 0.27, y - r * 0.52, r * 0.25, 5);
+  },
+  /* two pillars, a crescent between them */
+  priestess(g, x, y, r) {
     [-1, 1].forEach(s => {
-      part(g, new THREE.CircleGeometry(0.056, 3), w, s * 0.046, 0.115, 0, -Math.PI / 2, 0, s * 0.5);
-      part(g, new THREE.CircleGeometry(0.038, 3), w, s * 0.039, 0.062, 0, -Math.PI / 2, 0, s * 1.1);
-      part(g, new THREE.CylinderGeometry(0.004, 0.004, 0.05, 4), dullMat(0x6a5540),
-        s * 0.018, 0.152, 0, 0, 0, s * 0.5);
+      g.fillRect(x + s * r * 0.64 - r * 0.09, y - r * 0.72, r * 0.18, r * 1.46);
+      g.fillRect(x + s * r * 0.64 - r * 0.17, y - r * 0.84, r * 0.34, r * 0.14);
+    });
+    _crescent(g, x, y - r * 0.05, r * 0.42, r * 0.20);
+  },
+  /* a sheaf of wheat */
+  empress(g, x, y, r) {
+    [-1, 0, 1].forEach(s => {
+      _seg(g, x + s * r * 0.34, y + r * 0.84, x + s * r * 0.16, y - r * 0.52, 5);
+      for (let i = 0; i < 3; i++) {
+        const yy = y - r * 0.40 + i * r * 0.24, xx = x + s * (r * 0.18 + i * r * 0.03);
+        _shape(g, [[xx, yy], [xx + r * 0.20, yy + r * 0.06], [xx, yy + r * 0.16]], true);
+        _shape(g, [[xx, yy], [xx - r * 0.20, yy + r * 0.06], [xx, yy + r * 0.16]], true);
+      }
     });
   },
-  /* a little skull */
-  bonemeal(g) {
-    part(g, new THREE.SphereGeometry(0.048, 8, 6), dullMat(0xcdd6e0), 0, 0.105);
-    part(g, new THREE.BoxGeometry(0.052, 0.026, 0.046), dullMat(0xcdd6e0), 0, 0.062);
-    [-1, 1].forEach(s => part(g, new THREE.SphereGeometry(0.015, 6, 5),
-      dullMat(0x140a10), s * 0.020, 0.112, 0.036));
+  /* a squat throne with a squared crown */
+  emperor(g, x, y, r) {
+    g.fillRect(x - r * 0.52, y - r * 0.10, r * 1.04, r * 0.92);
+    g.fillRect(x - r * 0.62, y - r * 0.34, r * 0.20, r * 1.16);
+    g.fillRect(x + r * 0.42, y - r * 0.34, r * 0.20, r * 1.16);
+    [-1, 0, 1].forEach(s => g.fillRect(x + s * r * 0.32 - r * 0.09, y - r * 0.80, r * 0.18, r * 0.34));
+    g.fillRect(x - r * 0.44, y - r * 0.52, r * 0.88, r * 0.16);
   },
-  /* an eye on a stand */
-  sixthsense(g) {
-    part(g, new THREE.CylinderGeometry(0.012, 0.021, 0.05, 6), dullMat(0x6a5a48), 0, 0.048);
-    part(g, new THREE.SphereGeometry(0.045, 8, 7), dullMat(0xdcd8c8), 0, 0.115);
-    part(g, new THREE.CircleGeometry(0.022, 8), figMat(0xffd84a, 0.9), 0, 0.115, 0.044);
-    part(g, new THREE.CircleGeometry(0.010, 6), dullMat(0x140a06), 0, 0.115, 0.048);
+  /* a triple-barred cross */
+  hierophant(g, x, y, r) {
+    _seg(g, x, y - r * 0.82, x, y + r * 0.86, 8);
+    [[-0.46, 0.44], [-0.14, 0.60], [0.20, 0.40]].forEach(([dy, w]) =>
+      _seg(g, x - r * w, y + r * dy, x + r * w, y + r * dy, 7));
   },
-  /* a long reaching bone */
-  longarm(g) {
-    part(g, new THREE.CylinderGeometry(0.013, 0.013, 0.155, 6), dullMat(0xc2b699), 0, 0.10, 0, 0, 0, 0.42);
-    [[-0.032, 0.038], [0.032, 0.163]].forEach(([dx, y]) => {
-      part(g, new THREE.SphereGeometry(0.023, 6, 5), dullMat(0xc2b699), dx, y);
-      part(g, new THREE.SphereGeometry(0.018, 6, 5), dullMat(0xc2b699), dx * 1.55, y + 0.013);
-    });
+  /* two rings, joined */
+  lovers(g, x, y, r) {
+    _ring(g, x - r * 0.30, y, r * 0.46, 7);
+    _ring(g, x + r * 0.30, y, r * 0.46, 7);
   },
-  /* a leaning stack of coins */
-  greedcut(g) {
-    for (let i = 0; i < 5; i++) {
-      part(g, new THREE.CylinderGeometry(0.040, 0.040, 0.016, 8), figMat(0xffd34d, 0.55),
-        (i % 2 ? 0.006 : -0.005), 0.033 + i * 0.017, (i % 3 ? 0.004 : -0.004),
-        0, i * 0.4, 0.03);
+  /* a wheeled box */
+  chariot(g, x, y, r) {
+    g.fillRect(x - r * 0.58, y - r * 0.52, r * 1.16, r * 0.66);
+    _ring(g, x - r * 0.34, y + r * 0.44, r * 0.30, 6);
+    _ring(g, x + r * 0.34, y + r * 0.44, r * 0.30, 6);
+    _seg(g, x - r * 0.58, y - r * 0.52, x + r * 0.58, y - r * 0.52, 6);
+  },
+  /* a jaw held open */
+  strength(g, x, y, r) {
+    g.lineWidth = 7;
+    g.beginPath(); g.arc(x, y + r * 0.10, r * 0.68, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
+    g.beginPath(); g.arc(x, y + r * 0.10, r * 0.68, Math.PI * 0.08, Math.PI * 0.92); g.stroke();
+    for (let i = -1; i <= 1; i++) {
+      _shape(g, [[x + i * r * 0.30 - r * 0.10, y - r * 0.30],
+                 [x + i * r * 0.30 + r * 0.10, y - r * 0.30],
+                 [x + i * r * 0.30, y - r * 0.02]], true);
+      _shape(g, [[x + i * r * 0.30 - r * 0.10, y + r * 0.50],
+                 [x + i * r * 0.30 + r * 0.10, y + r * 0.50],
+                 [x + i * r * 0.30, y + r * 0.22]], true);
     }
   },
-  /* a miniature of the machine's own lever */
-  extraspin(g) {
-    part(g, new THREE.BoxGeometry(0.052, 0.024, 0.052), dullMat(0x3a322a), 0, 0.034);
-    part(g, new THREE.CylinderGeometry(0.010, 0.010, 0.115, 6), figMat(0xe8d850, 0.5), 0.013, 0.10, 0, 0, 0, 0.20);
-    part(g, new THREE.SphereGeometry(0.026, 7, 6), figMat(0xc01818, 0.7), 0.034, 0.163);
+  /* a hooded lantern */
+  hermit(g, x, y, r) {
+    _seg(g, x, y - r * 0.86, x, y - r * 0.56, 5);
+    g.beginPath(); g.arc(x, y - r * 0.86, r * 0.16, Math.PI, 0); g.lineWidth = 5; g.stroke();
+    _shape(g, [[x - r * 0.44, y - r * 0.44], [x + r * 0.44, y - r * 0.44],
+               [x + r * 0.30, y - r * 0.58], [x - r * 0.30, y - r * 0.58]], true);
+    g.lineWidth = 6;
+    g.strokeRect(x - r * 0.36, y - r * 0.44, r * 0.72, r * 0.94);
+    _shape(g, [[x, y - r * 0.24], [x + r * 0.16, y + r * 0.10],
+               [x, y + r * 0.34], [x - r * 0.16, y + r * 0.10]], true);
+    g.fillRect(x - r * 0.46, y + r * 0.50, r * 0.92, r * 0.14);
   },
-  /* an iron spike */
-  ironnerve(g) {
-    part(g, new THREE.ConeGeometry(0.026, 0.15, 6), dullMat(0x9aa2ab), 0, 0.10, 0, Math.PI);
-    part(g, new THREE.CylinderGeometry(0.040, 0.033, 0.022, 6), dullMat(0xb6bec6), 0, 0.176);
-  },
-  /* a taped-up fuse */
-  fusetape(g) {
-    part(g, new THREE.CylinderGeometry(0.026, 0.026, 0.115, 8), dullMat(0xd8c07a), 0, 0.09, 0, 0, 0, 0.16);
-    part(g, new THREE.CylinderGeometry(0.030, 0.030, 0.020, 8), dullMat(0x9aa2ab), -0.009, 0.038, 0, 0, 0, 0.16);
-    part(g, new THREE.CylinderGeometry(0.030, 0.030, 0.020, 8), dullMat(0x9aa2ab), 0.009, 0.145, 0, 0, 0, 0.16);
-    part(g, new THREE.CylinderGeometry(0.032, 0.032, 0.030, 8), figMat(0x58d0e0, 0.5), 0, 0.09, 0, 0, 0, 0.16);
-  },
-  /* a cinched coin pouch */
-  luckpurse(g) {
-    const s = part(g, new THREE.SphereGeometry(0.050, 8, 7), dullMat(0x7a5a34), 0, 0.074);
-    s.scale.set(1, 0.86, 1);
-    part(g, new THREE.CylinderGeometry(0.020, 0.031, 0.036, 7), dullMat(0x5e4426), 0, 0.128);
-    part(g, new THREE.TorusGeometry(0.021, 0.006, 4, 8), figMat(0x7ed321, 0.6), 0, 0.133, 0, Math.PI / 2);
-  },
-  /* the four-leaf clover itself */
-  wildclover(g) {
-    part(g, new THREE.CylinderGeometry(0.007, 0.007, 0.09, 5), dullMat(0x4a8f14), 0, 0.068);
-    const leaf = figMat(0x7ed321, 0.75);
-    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([dx, dz]) => {
-      const m = part(g, new THREE.SphereGeometry(0.030, 7, 6), leaf, dx * 0.028, 0.133, dz * 0.028);
-      m.scale.y = 0.55;
-    });
-  },
-  /* coins spilling out of a pocket */
-  deeppocket(g) {
-    part(g, new THREE.BoxGeometry(0.072, 0.072, 0.032), dullMat(0x4a4a58), 0, 0.058, -0.012, 0, 0, 0.12);
-    for (let i = 0; i < 4; i++) {
-      part(g, new THREE.CylinderGeometry(0.023, 0.023, 0.010, 8), figMat(0xffd34d, 0.55),
-        -0.034 + i * 0.023, 0.024 + (i === 1 ? 0.011 : 0), 0.034,
-        Math.PI / 2 * (i % 2), 0, i * 0.5);
+  /* spoked wheel */
+  wheel(g, x, y, r) {
+    _ring(g, x, y, r * 0.78, 7);
+    _ring(g, x, y, r * 0.20, 6);
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2;
+      _seg(g, x + Math.cos(a) * r * 0.22, y + Math.sin(a) * r * 0.22,
+              x + Math.cos(a) * r * 0.76, y + Math.sin(a) * r * 0.76, 4);
     }
+  },
+  /* a balance */
+  justice(g, x, y, r) {
+    _seg(g, x, y - r * 0.66, x, y + r * 0.78, 7);
+    _seg(g, x - r * 0.70, y - r * 0.50, x + r * 0.70, y - r * 0.50, 6);
+    [-1, 1].forEach(s => {
+      _seg(g, x + s * r * 0.62, y - r * 0.50, x + s * r * 0.62, y - r * 0.18, 4);
+      g.beginPath(); g.arc(x + s * r * 0.62, y - r * 0.18, r * 0.26, 0, Math.PI); g.fill();
+    });
+    g.fillRect(x - r * 0.34, y + r * 0.78, r * 0.68, r * 0.12);
+  },
+  /* a figure hung by one heel from a beam */
+  hanged(g, x, y, r) {
+    _seg(g, x - r * 0.72, y - r * 0.74, x + r * 0.72, y - r * 0.74, 7);
+    _seg(g, x + r * 0.24, y - r * 0.74, x + r * 0.24, y - r * 0.42, 5);
+    _seg(g, x + r * 0.24, y - r * 0.42, x - r * 0.24, y - r * 0.20, 6);
+    _seg(g, x - r * 0.24, y - r * 0.20, x - r * 0.24, y + r * 0.30, 7);
+    _ring(g, x - r * 0.24, y + r * 0.54, r * 0.22, 6);
+    _seg(g, x - r * 0.24, y - r * 0.04, x + r * 0.30, y + r * 0.16, 5);
+  },
+  /* a scythe */
+  death(g, x, y, r) {
+    _seg(g, x + r * 0.34, y - r * 0.82, x - r * 0.16, y + r * 0.86, 7);
+    g.lineWidth = 8;
+    g.beginPath(); g.arc(x - r * 0.18, y - r * 0.52, r * 0.62, Math.PI * 1.75, Math.PI * 0.42); g.stroke();
+    _seg(g, x + r * 0.02, y + r * 0.24, x + r * 0.44, y + r * 0.36, 5);
+  },
+  /* two vessels, one pouring into the other */
+  temperance(g, x, y, r) {
+    _shape(g, [[x - r * 0.74, y - r * 0.58], [x - r * 0.18, y - r * 0.58],
+               [x - r * 0.46, y - r * 0.02]], true);
+    _shape(g, [[x + r * 0.14, y + r * 0.18], [x + r * 0.70, y + r * 0.18],
+               [x + r * 0.42, y + r * 0.74]], true);
+    g.lineWidth = 5;
+    g.beginPath();
+    g.moveTo(x - r * 0.34, y - r * 0.10);
+    g.bezierCurveTo(x - r * 0.06, y + r * 0.04, x + r * 0.16, y + r * 0.02, x + r * 0.34, y + r * 0.20);
+    g.stroke();
+  },
+  /* horns over a pentagram */
+  devil(g, x, y, r) {
+    g.lineWidth = 7;
+    [-1, 1].forEach(s => {
+      g.beginPath();
+      g.moveTo(x + s * r * 0.22, y - r * 0.30);
+      g.quadraticCurveTo(x + s * r * 0.76, y - r * 0.56, x + s * r * 0.58, y - r * 0.92);
+      g.stroke();
+    });
+    _star(g, x, y + r * 0.28, r * 0.52, 5);
+  },
+  /* a struck tower */
+  tower(g, x, y, r) {
+    g.fillRect(x - r * 0.34, y - r * 0.42, r * 0.68, r * 1.24);
+    [-1, 0, 1].forEach(s => g.fillRect(x + s * r * 0.24 - r * 0.09, y - r * 0.60, r * 0.18, r * 0.22));
+    _shape(g, [[x + r * 0.44, y - r * 0.90], [x + r * 0.86, y - r * 0.34],
+               [x + r * 0.58, y - r * 0.38], [x + r * 0.80, y + r * 0.16],
+               [x + r * 0.40, y - r * 0.28], [x + r * 0.64, y - r * 0.34]], true);
+  },
+  /* an eight-pointed star */
+  star(g, x, y, r) {
+    _star(g, x, y, r * 0.86, 8);
+    _ring(g, x, y, r * 0.24, 5);
+  },
+  /* a crescent with a drop below */
+  moon(g, x, y, r) {
+    _crescent(g, x, y - r * 0.14, r * 0.62, r * 0.30);
+    _shape(g, [[x, y + r * 0.44], [x + r * 0.18, y + r * 0.74],
+               [x, y + r * 0.92], [x - r * 0.18, y + r * 0.74]], true);
+  },
+  /* a rayed disc */
+  sun(g, x, y, r) {
+    g.beginPath(); g.arc(x, y, r * 0.42, 0, Math.PI * 2); g.fill();
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2;
+      _seg(g, x + Math.cos(a) * r * 0.56, y + Math.sin(a) * r * 0.56,
+              x + Math.cos(a) * r * 0.92, y + Math.sin(a) * r * 0.92, 6);
+    }
+  },
+  /* a horn */
+  judgement(g, x, y, r) {
+    _shape(g, [[x + r * 0.30, y - r * 0.74], [x + r * 0.84, y - r * 0.50],
+               [x + r * 0.84, y - r * 0.04], [x + r * 0.30, y - r * 0.28]], true);
+    g.lineWidth = 9;
+    g.beginPath();
+    g.moveTo(x + r * 0.32, y - r * 0.50);
+    g.quadraticCurveTo(x - r * 0.40, y - r * 0.10, x - r * 0.62, y + r * 0.72);
+    g.stroke();
+    g.beginPath(); g.arc(x - r * 0.62, y + r * 0.76, r * 0.16, 0, Math.PI * 2); g.fill();
+  },
+  /* a wreath around a small world */
+  world(g, x, y, r) {
+    g.lineWidth = 7; g.setLineDash([r * 0.20, r * 0.13]);
+    g.beginPath(); g.arc(x, y, r * 0.82, 0, Math.PI * 2); g.stroke();
+    g.setLineDash([]);
+    _ring(g, x, y, r * 0.38, 6);
+    _seg(g, x - r * 0.38, y, x + r * 0.38, y, 4);
+    _seg(g, x, y - r * 0.38, x, y + r * 0.38, 4);
   },
 };
 
-/* Procedural token for any charm without a hand-built figure. With the charm
-   list now in the dozens, modelling each one is not on — but falling back to a
-   single shape (they all used to become a wax seal) makes a shelf of identical
-   objects, which is worse than no model at all. So the shape comes from the
-   KIND, the colour from the symbol it feeds, and the height from the tier: a
-   glance at the rack tells you what sort of run you have been building.
-   Emissive stays low — the composite bloom turns any bright small object into a
-   white blob with no silhouette (learned the hard way on the first figurines). */
-const _SYM_COLOR = {};
-for (const s of SYMBOLS) _SYM_COLOR[s.id] = parseInt(s.color.slice(1), 16);
-const _KIND_COLOR = { PAYOUT: 0xd8b070, PATTERN: 0x88b0d0, TEMPO: 0xc0c8a0,
-                      NERVE: 0x9aa8b0, GREED: 0xe0b040, FUSED: 0xc890e8,
-                      LUCK: 0x7ed321, COMPOUND: 0xff7a3a, CULL: 0x9a8fa4,
-                      RITE: 0xffe066, CURSE: 0xc0304a };
+/* The face. One canvas per card, cached — a late run has twenty on the rack
+   plus four on the tray and repainting them every frame would be absurd. */
+const _faceCache = {};
+function cardFaceTex(c) {
+  if (_faceCache[c.id]) return _faceCache[c.id];
+  const ink = cardInk(c);
+  const S = c.suit ? SYMBOLS.find(s => s.id === c.suit) : null;
+  const tex = makeTex(256, 420, (g, w, h) => {
+    /* card stock: reversed cards are printed on something that went bad */
+    g.fillStyle = c.kind === 'REVERSED' ? '#170a0e' : '#17110c';
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 900; i++) {
+      g.fillStyle = 'rgba(255,240,210,' + (0.006 + Math.random() * 0.022) + ')';
+      g.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+    /* The border used to be full ink at lineWidth 7 and every card on the rack
+       read as a lit neon sign rather than printed stock. The frame is dimmed
+       and only the hairline inside it carries the full colour. */
+    g.strokeStyle = ink; g.fillStyle = ink;
+    g.globalAlpha = 0.55; g.lineWidth = 5; g.strokeRect(10, 10, w - 20, h - 20);
+    g.globalAlpha = 1;    g.lineWidth = 2; g.strokeRect(22, 22, w - 44, h - 44);
+    /* one corner index, top left. There was a second one rotated into the
+       bottom right — playing-card habit — and it landed straight on top of the
+       label line. A tarot card doesn't have indices in both corners anyway. */
+    g.font = '900 26px "Arial Black", sans-serif';
+    g.textAlign = 'left'; g.textBaseline = 'top';
+    g.fillText(c.kind === 'MINOR' ? c.rank[0] : c.num, 34, 34);
 
-function proceduralFigure(g, c) {
-  const symId = c.sym ? Object.keys(c.sym)[0] : null;
-  const col = (symId && _SYM_COLOR[symId]) || _KIND_COLOR[c.kind] || 0xb0a080;
-  const t = c.tier === 'III' ? 2 : c.tier === 'II' ? 1 : c.tier === '★' ? 3 : 0;
-  const stone = dullMat(0x6a5f52);
+    /* the art panel */
+    g.save();
+    g.beginPath(); g.rect(40, 92, w - 80, 196); g.clip();
+    if (S) drawSymbol(g, S, w / 2, 190, 148);
+    else {
+      g.strokeStyle = ink; g.fillStyle = ink;
+      g.lineJoin = 'round'; g.lineCap = 'round';
+      g.shadowColor = ink; g.shadowBlur = 7;
+      (MAJOR_GLYPH[c.arcana] || MAJOR_GLYPH.wheel)(g, w / 2, 190, 86);
+    }
+    g.restore();
+    g.strokeStyle = ink; g.fillStyle = ink;
+    g.lineWidth = 2; g.strokeRect(40, 92, w - 80, 196);
 
-  if (c.kind === 'PATTERN') {
-    /* a little slate with pips punched in it — reads as a payline card */
-    part(g, new THREE.BoxGeometry(0.11, 0.13, 0.014), dullMat(0x4a4038), 0, 0.09);
-    for (let i = 0; i <= t; i++)
-      part(g, new THREE.BoxGeometry(0.085, 0.012, 0.006), figMat(col, 0.55), 0, 0.058 + i * 0.026, 0.010);
-  } else if (c.kind === 'TEMPO') {
-    /* pinched hourglass */
-    part(g, new THREE.CylinderGeometry(0.042, 0.012, 0.055, 7), dullMat(0xcfc6ae), 0, 0.05);
-    part(g, new THREE.CylinderGeometry(0.012, 0.042, 0.055, 7), dullMat(0xcfc6ae), 0, 0.104);
-    part(g, new THREE.CylinderGeometry(0.046, 0.046, 0.008, 7), stone, 0, 0.135);
-  } else if (c.kind === 'NERVE') {
-    /* an iron nail, bent over */
-    part(g, new THREE.CylinderGeometry(0.010, 0.010, 0.14, 6), dullMat(0x8a8f96), 0, 0.09);
-    part(g, new THREE.CylinderGeometry(0.026, 0.026, 0.012, 6), dullMat(0x9aa0a8), 0, 0.164);
-    part(g, new THREE.CylinderGeometry(0.008, 0.008, 0.05, 6), dullMat(0x8a8f96),
-      0.022, 0.155, 0, 0, 0, Math.PI / 2.4);
-  } else if (c.kind === 'GREED') {
-    /* a stack of coins, taller the deeper you are in */
-    for (let i = 0; i <= t + 1; i++)
-      part(g, new THREE.CylinderGeometry(0.038, 0.038, 0.016, 8), figMat(col, 0.5),
-        (i % 2) * 0.004, 0.03 + i * 0.018);
-  } else if (c.kind === 'FUSED') {
-    /* a cut stone on a claw — the only ones that get a halo */
-    part(g, new THREE.CylinderGeometry(0.016, 0.030, 0.055, 6), stone, 0, 0.05);
-    part(g, new THREE.OctahedronGeometry(0.052), figMat(col, 1.0), 0, 0.125);
-    part(g, new THREE.OctahedronGeometry(0.021), figMat(0xfff0c0, 0.8), 0, 0.125);
-  } else {
-    /* PAYOUT — a struck token on a short post, thicker each tier */
-    part(g, new THREE.CylinderGeometry(0.014, 0.022, 0.045 + t * 0.012, 6), stone, 0, 0.04);
-    part(g, new THREE.CylinderGeometry(0.050, 0.050, 0.016 + t * 0.008, 9), figMat(col, 0.55),
-      0, 0.095 + t * 0.012, 0, Math.PI / 2.6);
-    if (t >= 2) part(g, new THREE.TorusGeometry(0.055, 0.008, 4, 9), dullMat(0xb8a880),
-      0, 0.095 + t * 0.012, 0, Math.PI / 2.6);
-  }
+    /* the name, shrunk to fit rather than clipped — WHEEL OF FORTUNE and
+       THE HIGH PRIESTESS are both on this deck */
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    let fs = 27;
+    do { g.font = '900 ' + fs + 'px "Arial Black", sans-serif'; fs -= 1; }
+    while (fs > 12 && g.measureText(c.name).width > w - 64);
+    g.fillStyle = c.kind === 'REVERSED' ? '#ff8fa0' : '#ffe6bc';
+    g.fillText(c.name, w / 2, 324);
+
+    g.font = '900 15px "Arial Black", sans-serif';
+    g.fillStyle = ink;
+    g.fillText(cardLabel(c) + (c.kind === 'MAJOR' ? '  ' + c.num : ''), w / 2, 360);
+  }, { smooth: true });
+  _faceCache[c.id] = tex;
+  return tex;
 }
 
-function charmFigure(c) {
+/* One back for the whole deck. */
+let _backCache = null;
+function cardBackTex() {
+  if (_backCache) return _backCache;
+  _backCache = makeTex(256, 420, (g, w, h) => {
+    g.fillStyle = '#0e0a10'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#4a3a58'; g.lineWidth = 3;
+    for (let y = -40; y < h + 40; y += 34)
+      for (let x = -40; x < w + 40; x += 34) {
+        g.beginPath();
+        g.moveTo(x + 17, y); g.lineTo(x + 34, y + 17);
+        g.lineTo(x + 17, y + 34); g.lineTo(x, y + 17);
+        g.closePath(); g.stroke();
+      }
+    g.fillStyle = 'rgba(14,10,16,.82)'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#4a3358'; g.lineWidth = 6; g.strokeRect(12, 12, w - 24, h - 24);
+    g.fillStyle = '#5c3d74';
+    _star(g, w / 2, h / 2, 52, 5);
+    g.strokeStyle = '#5c3d74'; _ring(g, w / 2, h / 2, 74, 5);
+  }, { smooth: true });
+  return _backCache;
+}
+
+/* The slab. Face on +Z, back on -Z, cut edges all round, and a shallow stand
+   so it reads as propped on a shelf rather than hovering above it. */
+function cardMesh(c) {
   const grp = new THREE.Group();
-  /* common plinth so everything lines up on the tray */
-  part(grp, new THREE.CylinderGeometry(0.072, 0.082, 0.022, 8),
-    lam({ map: TEX.metal, color: 0x6a5a48 }), 0, 0.011);
-  /* Everything ABOVE the plinth lives in its own group. The FX pass spins,
-     bobs and twitches this and only this, so the base it stands on never
-     moves — and a delivered charm_<id>.glb drops into the same slot and
-     animates identically without a line of per-charm code. */
   const body = new THREE.Group();
   grp.add(body);
-  const glb = MODELS['charm_' + c.id];
-  if (glb) {
-    /* add `charm_<id>: 'models/charm_<id>.glb'` to DELIVERED to switch a
-       charm over to the real model — nothing else here needs touching */
-    const inst = fitInstance(glb.scene.clone(true), 0.20);
-    inst.position.y += 0.022;              /* stand it on top of the plinth */
-    psxifyModel(inst);
-    body.add(inst);
+
+  const faceT = cardFaceTex(c);
+  /* the whole texture turns over for a reversed card — name, index and glyph
+     together, which is exactly how a reversed card sits in a real spread */
+  if (c.rev && faceT.rotation !== Math.PI) {
+    faceT.center.set(0.5, 0.5); faceT.rotation = Math.PI;
   }
-  else if (FIGURES[c.id]) FIGURES[c.id](body);
-  else proceduralFigure(body, c);
-  charmFX(grp, body, c);
+  const face = lam({ map: faceT });
+  /* Just enough self-glow to stay readable in a blackout — it was 0.26 and a
+     full rack lit the room like a bank of signs. The composite bloom picks up
+     anything above about 0.15 and turns the ink into a smear. */
+  face.emissive = new THREE.Color(0xffffff);
+  face.emissiveMap = faceT;
+  face.emissiveIntensity = 0.10;
+  const back = lam({ map: cardBackTex() });
+  const edge = lam({ color: 0x241c16 });
+  /* material order is +x -x +y -y +z -z */
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(CARD_W, CARD_H, CARD_T),
+                              [edge, edge, edge, edge, face, back]);
+  slab.position.y = CARD_H / 2 + 0.012;
+  slab.rotation.x = -0.10;                 /* leant back a little */
+  body.add(slab);
+
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(CARD_W * 0.86, 0.012, 0.030),
+                               lam({ map: TEX.metal, color: 0x4a3e32 }));
+  stand.position.y = 0.006; grp.add(stand);
+
+  cardFX(grp, body, c);
   return grp;
 }
 
 /* ---- signs of life on the figurines --------------------------------------
    A late run stands twenty-odd tokens on the racks, and until now every one of
-   them was a dead prop. Each charm now carries a small light and a slow motion
+   them was a dead prop. Each card now carries a small light and a slow motion
    keyed off its KIND, so the shelf reads as a lit collection you built rather
    than a row of grey lumps — and so the expensive ones announce themselves
    across a dark room.
 
-   Deliberately NO PointLight per charm. Lambert's per-object light budget is
+   Deliberately NO PointLight per card. Lambert's per-object light budget is
    already spent on the two machines, the screen glow and the rack lamps; twenty
    more would cost a shader recompile and a real slice of the frame. The "light"
    is one additive billboard, which costs a sprite draw and picks up the bloom
@@ -63180,9 +63315,13 @@ function glowSprite(hex, size, opacity) {
   return s;
 }
 
-/* One row per kind, so the rack has texture instead of twenty things doing the
-   same wobble: nerve charms sit still and flinch, compound charms throb, luck
-   charms trail motes, pattern charms run their pips like a chase light.
+/* One row per kind, so a filling rack has texture instead of twenty things
+   doing the same wobble: a suit card sits quietly, an upright major breathes,
+   a reversed one twitches and trails motes.
+
+   NO `spin` on any of them any more. A card has a printed face and a blank
+   back, and a token that slowly rotates spends half its life showing you the
+   back — the whole reason the faces are painted. They rock on the spot instead.
 
    `glow` is the sprite's world size in metres. These were half this to begin
    with and vanished outright: the rack stands a foot from a cabinet throwing a
@@ -63190,37 +63329,29 @@ function glowSprite(hex, size, opacity) {
    retune against the RACK, never the shop tray — the tray is the dark end of
    the room and will happily read a glow the rack swallows whole. */
 const _FX_KIND = {
-  PAYOUT:   { spin: 0.16, bob: 0.005, rate: 1.5, amp: 0.30, glow: 0.115, motes: 0 },
-  PATTERN:  { spin: 0,    bob: 0.004, rate: 2.2, amp: 0.55, glow: 0.100, motes: 0, chase: 0.9 },
-  TEMPO:    { spin: 0.50, bob: 0.008, rate: 1.0, amp: 0.25, glow: 0.095, motes: 0 },
-  NERVE:    { spin: 0,    bob: 0.002, rate: 0.8, amp: 0.18, glow: 0.080, motes: 0, twitch: 1 },
-  LUCK:     { spin: 0.20, bob: 0.007, rate: 1.3, amp: 0.35, glow: 0.108, motes: 2 },
-  GREED:    { spin: 0.34, bob: 0.004, rate: 2.6, amp: 0.45, glow: 0.122, motes: 0 },
-  COMPOUND: { spin: 0.42, bob: 0.006, rate: 3.0, amp: 0.55, glow: 0.135, motes: 1 },
-  FUSED:    { spin: 0.30, bob: 0.009, rate: 1.7, amp: 0.55, glow: 0.155, motes: 3 },
-  CULL:     { spin: 0.10, bob: 0.003, rate: 0.9, amp: 0.22, glow: 0.070, motes: 0 },
-  RITE:     { spin: 0.24, bob: 0.010, rate: 1.4, amp: 0.60, glow: 0.150, motes: 2 },
-  CURSE:    { spin: 0.18, bob: 0.004, rate: 2.9, amp: 0.70, glow: 0.140, motes: 2, twitch: 1 },
+  MINOR:    { spin: 0, rock: 0.010, bob: 0.003, rate: 1.2, amp: 0.26, glow: 0.100, motes: 0 },
+  MAJOR:    { spin: 0, rock: 0.018, bob: 0.005, rate: 1.6, amp: 0.48, glow: 0.140, motes: 1 },
+  REVERSED: { spin: 0, rock: 0.026, bob: 0.004, rate: 2.7, amp: 0.68, glow: 0.150, motes: 2,
+              twitch: 1 },
 };
-const CHARM_FX = [];
-/* peak sprite opacity, and what a charm keeps burning through a power cut.
-   The room dies at the fuse box; these do not — a charm is a trinket, not a
-   filament — so a blackout turns the rack into the only light left instead of
-   putting it out. Drop FX_DARK to 0.12 to have them go with everything else. */
+const CARD_FX = [];
+/* peak sprite opacity, and what a card keeps burning through a power cut.
+   The room dies at the fuse box; the deck does not — so a blackout turns the
+   rack into the only light left instead of putting it out. Drop FX_DARK to
+   0.12 to have them go dark with everything else. */
 const FX_GLOW = 0.62, FX_DARK = 0.45;
 
-function charmFX(grp, body, c) {
-  const k = _FX_KIND[c.kind] || _FX_KIND.PAYOUT;
+function cardFX(grp, body, c) {
+  const k = _FX_KIND[c.kind] || _FX_KIND.MINOR;
   const symId = c.sym ? Object.keys(c.sym)[0] : null;
   const col = (symId && _SYM_COLOR[symId]) || _KIND_COLOR[c.kind] || 0xb0a080;
-  /* tier drives how loud it burns, so a tier III out-shines the tier I beside
-     it without anyone having to walk over and read the tag */
-  const t = c.tier === 'III' ? 2 : c.tier === 'II' ? 1
-          : (c.tier === '★' || c.tier === '∞') ? 3 : 0;
-  const size = k.glow * (1 + t * 0.14);
+  /* `pow` drives how loud it burns, so a King out-shines the Ace beside it and
+     a reversed major out-shines the lot — without anyone having to walk over
+     and read the face */
+  const size = k.glow * (1 + (c.pow || 0) * 0.14);
 
   const glow = glowSprite(col, size, FX_GLOW);
-  glow.position.y = 0.115;
+  glow.position.y = CARD_H * 0.55;
   body.add(glow);
 
   const motes = [];
@@ -63230,10 +63361,11 @@ function charmFX(grp, body, c) {
     motes.push({ s, ph: i * (Math.PI * 2 / k.motes), r: 0.072 + i * 0.011, sp: 0.9 + i * 0.25 });
   }
 
-  /* Pulse what the figure ALREADY lights up with rather than bolting more on.
-     figMat() hands every part its own material, so writing emissiveIntensity
-     here can't bleed into another token. An imported .glb ships with no
-     emissive by spec, so it simply gets the sprite and the motion. */
+  /* Pulse what the card ALREADY lights up with rather than bolting more on.
+     The slab carries a MATERIAL ARRAY (six faces) and the guard below skips
+     those on purpose — pulsing a card's printed face would strobe the art. So
+     in practice a card gets the sprite and the motion, and this loop is here
+     for anything with a single lit material. */
   const lit = [];
   body.traverse(o => {
     if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
@@ -63243,32 +63375,35 @@ function charmFX(grp, body, c) {
     lit.push(o);
   });
 
-  CHARM_FX.push({ grp, body, k, glow, motes, lit, size,
+  CARD_FX.push({ grp, body, k, glow, motes, lit, size,
                   base: FX_GLOW, ph: rand() * Math.PI * 2,
                   twitch: 0, next: 1 + rand() * 3 });
 }
 
 const _fxRoot = o => { let p = o; while (p.parent) p = p.parent; return p; };
 
-function updateCharmFX(dt) {
+function updateCardFX(dt) {
   const pw = horror.power ? 1 : FX_DARK;
-  for (let i = CHARM_FX.length - 1; i >= 0; i--) {
-    const f = CHARM_FX[i];
-    /* tokens are dropped wholesale by clearCharmTokens() and closeShop().
+  for (let i = CARD_FX.length - 1; i >= 0; i--) {
+    const f = CARD_FX[i];
+    /* tokens are dropped wholesale by clearCardTokens() and closeShop().
        Rather than hooking both call sites, notice the orphan and let go. */
-    if (_fxRoot(f.grp) !== scene) { CHARM_FX.splice(i, 1); continue; }
+    if (_fxRoot(f.grp) !== scene) { CARD_FX.splice(i, 1); continue; }
 
     const k = f.k, t = elapsed + f.ph;
-    let y = Math.sin(t * 1.6) * k.bob, rz = 0;
+    let y = Math.sin(t * 1.6) * k.bob;
+    /* the rock replaces the old spin: the face stays toward you and the card
+       leans, the way a propped card settles */
+    let rz = Math.sin(t * k.rate * 0.42) * (k.rock || 0);
 
-    /* NERVE charms hold dead still, then flinch — a tic, not a wobble */
+    /* a REVERSED card holds dead still, then flinches — a tic, not a wobble */
     if (k.twitch) {
       f.next -= dt;
       if (f.next <= 0) { f.twitch = 0.22; f.next = 1.6 + rand() * 3.4; }
       if (f.twitch > 0) {
         f.twitch = Math.max(0, f.twitch - dt);
         const a = f.twitch / 0.22;
-        rz = Math.sin(f.twitch * 90) * 0.09 * a;
+        rz += Math.sin(f.twitch * 90) * 0.09 * a;
         y += Math.sin(f.twitch * 70) * 0.006 * a;
       }
     }
@@ -63282,15 +63417,14 @@ function updateCharmFX(dt) {
 
     for (let j = 0; j < f.lit.length; j++) {
       const o = f.lit[j];
-      /* `chase` staggers each part so the pattern slates run their pips like a
-         marquee instead of blinking as one lump */
       const p = k.chase ? 0.5 + 0.5 * Math.sin(t * k.rate - j * k.chase) : pulse;
       o.material.emissiveIntensity = o.userData.fxBase * ((1 - k.amp * 0.5) + k.amp * p) * pw;
     }
 
     for (const mo of f.motes) {
       const a = t * mo.sp + mo.ph;
-      mo.s.position.set(Math.cos(a) * mo.r, 0.10 + Math.sin(a * 1.7) * 0.022, Math.sin(a) * mo.r);
+      mo.s.position.set(Math.cos(a) * mo.r, CARD_H * 0.5 + Math.sin(a * 1.7) * 0.026,
+                        Math.sin(a) * mo.r);
       mo.s.material.opacity = (0.32 + 0.30 * (0.5 + 0.5 * Math.sin(a * 2.3))) * pw;
     }
   }
@@ -63309,19 +63443,19 @@ function priceTag(c) {
     while (fs > 11 && g.measureText(c.name).width > w - 18);
     g.fillStyle = '#ffc65a';
     g.fillText(c.name, w / 2, 24);
-    /* tier on the tag itself — with three rungs per symbol the name alone no
+    /* the label on the tag itself — with three rungs per suit the name alone no
        longer tells you which one is on the tray */
     if (c.tier) {
       g.font = '900 13px "Arial Black", sans-serif';
       g.fillStyle = '#9a8a6a';
-      g.fillText(c.kind + '  ' + c.tier, w / 2, 41);
+      g.fillText(cardLabel(c) + '  ' + c.tier, w / 2, 41);
     }
 
     drawCoin(g, 52, 60, 11, '#ffd34d');
     g.font = '900 27px "Arial Black", sans-serif';
     g.fillStyle = '#ffffff';
     g.textAlign = 'left';
-    g.fillText(String(charmCost(c)), 72, 61);
+    g.fillText(String(cardCost(c)), 72, 61);
   }, { smooth: true });
 }
 
@@ -63343,9 +63477,9 @@ function aimedShopItem() {
 function buyAimed() {
   const it = aimedShopItem();
   if (!it) return;
-  const price = charmCost(it.charm);
+  const price = cardCost(it.card);
   if (game.coins < price) {
-    toast('CANNOT AFFORD ' + it.charm.name, 1800); AUDIO.lose(); return;
+    toast('CANNOT AFFORD ' + it.card.name, 1800); AUDIO.lose(); return;
   }
   if (player.carrying) { toast('HANDS FULL — PLACE IT FIRST', 1800); return; }
   game.coins -= price;
@@ -63355,16 +63489,16 @@ function buyAimed() {
   AUDIO.win(120);
   /* Carrying it to a rack only ever mattered because you might put it on your
      PARTNER's machine. Solo there is exactly one rack, so the walk was pure
-     ceremony between wanting a charm and having it — it goes straight on.
+     ceremony between wanting a card and holding it — it goes straight on.
      Co-op keeps the carry, because there the choice is real. */
   if (net.connected) {
-    player.carrying = it.charm.id;
-    toast('CARRYING ' + it.charm.name + ' — PUT IT ON A MACHINE', 2600);
+    player.carrying = it.card.id;
+    toast('CARRYING ' + it.card.name + ' — PUT IT ON A MACHINE', 2600);
   } else {
-    myMachine.charms.push(it.charm.id);
-    spawnCharmToken(myMachine, it.charm.id, myMachine.charms.length - 1);
+    myMachine.cards.push(it.card.id);
+    spawnCardToken(myMachine, it.card.id, myMachine.cards.length - 1);
     refreshBoards();
-    toast(it.charm.name + ' — FITTED', 2200);
+    toast(it.card.name + ' — FITTED', 2200);
   }
   syncHUD();
 }
@@ -63386,9 +63520,9 @@ function nearRack() {
 function placeCarried() {
   const m = nearRack();
   if (!m || !player.carrying) return;
-  const c = charmById(player.carrying);
-  m.charms.push(player.carrying);
-  spawnCharmToken(m, player.carrying, m.charms.length - 1);
+  const c = cardById(player.carrying);
+  m.cards.push(player.carrying);
+  spawnCardToken(m, player.carrying, m.cards.length - 1);
   player.carrying = null;
   AUDIO.win(90);
   toast(c.name + ' PLACED', 2000);
@@ -63396,7 +63530,7 @@ function placeCarried() {
   syncHUD();
 }
 
-/* Clovers buy a fresh tray — and now a fresh hand of free-charm cards too. The
+/* Clovers buy a fresh tray — and a freshly dealt spread too. The
    offer used to be take-it-or-leave-it, which is where a clover hoard went to
    die: nothing to spend it on between shops. */
 function rerollShop() {
@@ -63404,44 +63538,46 @@ function rerollShop() {
   const offerUp = !document.getElementById('offer').classList.contains('hide');
   if (!shop.open && !offerUp) { AUDIO.lose(); return; }
   game.clovers--;
-  if (offerUp) { offerFreeCharm(); toast('OFFER REROLLED', 1600); syncHUD(); return; }
+  if (offerUp) { dealTarot(); toast('OFFER REROLLED', 1600); syncHUD(); return; }
   openShop();
   toast('TRAY REROLLED', 1600);
   syncHUD();
 }
 
-/* The tribute: one charm on the house, offered after the collector leaves.
-   Straight compensation for the spins now costing money. */
-function offerFreeCharm() {
-  const pool = charmPool();
-  /* while you still need shovel parts, the salesman also slips one onto the tray —
-     take the part and forgo the charm, or take the charm and stay chained longer */
+/* THE SPREAD. Laid out once the collector has gone: take exactly one card and
+   the night turns over. It always holds one REVERSED card — the strong one,
+   and the only one whose price isn't money. */
+function dealTarot() {
+  const pool = cardPool();
+  /* while you still need shovel parts, one gets laid down with the spread —
+     take the part and forgo the card, or take the card and stay chained longer */
   const needParts = myMachine && !game.builtShovel && game.parts < SHOVEL_PARTS;
   if ((!pool.length && !needParts && !boonPool().length) || !myMachine) { advanceAfterTribute(); return; }
 
   const cards = [];
   if (needParts) cards.push({ part: true });
-  /* one boon, always, ahead of the charms — this is the night's actual reward */
+  /* one reversed card, always, ahead of the rest — getting through a night has
+     to be worth something on its own and not just reset the counter */
   const boons = boonPool();
-  if (boons.length) cards.push({ charm: boons[(Math.random() * boons.length) | 0] });
-  /* Four on the tray, not three, and deliberately spread across kinds so the
-     offer is a CHOICE rather than three flavours of the same idea — with the
-     list this long, an unweighted draw kept handing over three symbol charms. */
+  if (boons.length) cards.push({ card: boons[(Math.random() * boons.length) | 0] });
+  /* Four laid down, and no two off the same suit or the same arcana. Grouping
+     by KIND used to do that job, but the deck only has three kinds now — while
+     an unweighted draw will happily deal the Ace, Seven and King of one suit,
+     which is one decision wearing three hats. */
   const pick = [];
-  const byKind = {};
-  for (const c of pool) (byKind[c.kind] = byKind[c.kind] || []).push(c);
-  const kinds = Object.keys(byKind).sort(() => Math.random() - 0.5);
-  const ROOM = cards.length > (needParts ? 1 : 0) ? 3 : 4;   /* the boon took a slot */
-  for (const k of kinds) {
+  const byLine = {};
+  for (const c of pool) {
+    const line = c.arcana || c.suit || c.id;
+    (byLine[line] = byLine[line] || []).push(c);
+  }
+  const lines = Object.keys(byLine).sort(() => Math.random() - 0.5);
+  const ROOM = cards.length > (needParts ? 1 : 0) ? 3 : 4;   /* the reversed one took a slot */
+  for (const ln of lines) {
     if (pick.length >= ROOM) break;
-    const bucket = byKind[k];
+    const bucket = byLine[ln];
     pick.push(bucket[(Math.random() * bucket.length) | 0]);
   }
-  while (pick.length < Math.min(ROOM, pool.length)) {
-    const c = pool[(Math.random() * pool.length) | 0];
-    if (!pick.includes(c)) pick.push(c);
-  }
-  pick.forEach(c => cards.push({ charm: c }));
+  pick.forEach(c => cards.push({ card: c }));
 
   const host = document.getElementById('offerCards');
   host.innerHTML = '';
@@ -63450,6 +63586,7 @@ function offerFreeCharm() {
     el.className = 'card';
     if (card.part) {
       const got = Math.min(SHOVEL_PARTS, game.parts + 1);
+      el.className = 'card k-ESCAPE';
       el.innerHTML = '<span class="k">ESCAPE</span>' +
                      '<span class="n">SHOVEL PART</span>' +
                      '<span class="d">A piece of a shovel. ' + got + ' / ' + SHOVEL_PARTS + ' once taken.</span>' +
@@ -63465,26 +63602,26 @@ function offerFreeCharm() {
         syncHUD();
       });
     } else {
-      const c = card.charm;
-      /* Tier badge and the "leads to" line are the whole point of the ladder —
-         without them a tier I charm reads as a weak card rather than the first
-         rung of something. Owned copies show too, for the stackables. */
-      const have = charmCount(c.id);
-      const next = CHARMS.find(x => x.needs && x.needs.includes(c.id));
+      const c = card.card;
+      /* The index and the "leads to" line are the whole point of the ladder —
+         without them an Ace reads as a weak card rather than the first rung of
+         something. Owned copies show too, for the stackables. */
+      const have = cardCount(c.id);
+      const next = TAROT.find(x => x.needs && x.needs.includes(c.id));
       el.className = 'card k-' + c.kind;
-      el.innerHTML = '<span class="k">' + c.kind +
+      el.innerHTML = '<span class="k">' + cardLabel(c) +
                        (c.tier ? '<b class="tier">' + c.tier + '</b>' : '') + '</span>' +
                      '<span class="n">' + c.name + '</span>' +
                      '<span class="d">' + c.desc + '</span>' +
-                     (have ? '<span class="own">OWNED ×' + have + '</span>' : '') +
+                     (have ? '<span class="own">HELD ×' + have + '</span>' : '') +
                      (next ? '<span class="lead">leads to ' + next.name + '</span>' : '') +
-                     '<span class="pick">TAKE — FREE</span>';
+                     '<span class="pick">' + (c.rev ? 'TAKE IT REVERSED' : 'TAKE — FREE') + '</span>';
       el.addEventListener('click', () => {
-        myMachine.charms.push(c.id);
-        spawnCharmToken(myMachine, c.id, myMachine.charms.length - 1);
+        myMachine.cards.push(c.id);
+        spawnCardToken(myMachine, c.id, myMachine.cards.length - 1);
         refreshBoards();
         AUDIO.win(140);
-        toast(c.name + ' — ON THE HOUSE', 2400);
+        toast(c.name + (c.rev ? ' — REVERSED' : ' — DEALT'), 2400);
         hideOverlay('offer');
         advanceAfterTribute();
         syncHUD();
@@ -63492,10 +63629,10 @@ function offerFreeCharm() {
     }
     host.appendChild(el);
   });
-  document.querySelector('#offer h2').textContent = 'IT LEAVES YOU SOMETHING';
+  document.querySelector('#offer h2').textContent = 'IT DEALS YOU ONE';
   document.querySelector('#offer .sub').innerHTML = needParts
-    ? 'One thing, no charge — a charm for the machine,<br>or a piece of your way out.'
-    : 'One charm, no charge.<br>It goes on your machine.';
+    ? 'One card, no charge — or a piece of your way out.<br>The reversed one gives more and takes more.'
+    : 'One card, no charge.<br>The reversed one gives more and takes more.';
   showOverlay('offer');
 }
 
@@ -63514,7 +63651,7 @@ function finishNight() {
     toast('WAITING FOR THE OTHER ONE', 2200);
     return;                              /* it will not open the door yet */
   }
-  offerFreeCharm();      /* it advances the night once you have picked */
+  dealTarot();      /* it advances the night once you have picked */
 }
 
 function nextNight() {
@@ -63536,10 +63673,10 @@ function resetRun() {
   game.runOver = false;
   game.offering = false;
   game.round = 1;
-  for (const mm of MACHINES) mm.charms.length = 0;
+  for (const mm of MACHINES) mm.cards.length = 0;
   game.paid = false;
   game.collectT = 0;
-  clearCharmTokens();
+  clearCardTokens();
   closeShop();
   game.coins = 0;
   game.clovers = 0;
@@ -64799,7 +64936,7 @@ let camShake = 0;
 function shakeCam(v) { camShake = Math.max(camShake, v); }
 
 /* ---------------------------------------------------------------- [S-14]
-   Overlays: the charm picker, the pause menu, and the fade. Any overlay
+   Overlays: the spread, the pause menu, and the fade. Any overlay
    releases the pointer, so `ui.blocking` gates all gameplay input. */
 
 const ui = { blocking: null, started: false, fade: 0, fadeTarget: 0, sens: 1 };
@@ -64843,11 +64980,13 @@ function releaseKeys() {
 function togglePause() {
   if (ui.blocking === 'offer') return;      /* the tray is not optional */
   if (ui.blocking === 'menu') { hideOverlay('menu'); return; }
-  /* rebuild the owned-charm list so you can actually re-read what you bought */
-  const host = document.getElementById('menuCharms');
+  /* rebuild the hand so you can actually re-read what you are holding. Reads
+     the MACHINE, not game.* — the old game.cards mirror was never written to,
+     which is why this list came up empty every time. */
+  const host = document.getElementById('menuCards');
   host.innerHTML = '';
-  for (const id of game.charms) {
-    const c = charmById(id);
+  for (const id of (myMachine ? myMachine.cards : [])) {
+    const c = cardById(id);
     if (!c) continue;
     const row = document.createElement('div');
     row.className = 'row2';
@@ -66374,9 +66513,9 @@ function sendHallWalker() {
 /* Swap a machine's fallback box for the delivered cabinet. Guarded — a missing
    model just leaves the fallback box, and the game runs the same.
 
-   The charm cabinet (hutch) and locked chest that used to flank each station
-   are GONE: the machine shrank to a bar-top unit on a table, and the charm
-   shelf beside it is now the only place charms live. */
+   The card cabinet (hutch) and locked chest that used to flank each station
+   are GONE: the machine shrank to a bar-top unit on a table, and the card
+   shelf beside it is now the only place cards live. */
 /* The wall boards: swap the procedural housing for the delivered frame and
    drop the live canvas onto its measured blank panel. */
 function dressBoards() {
@@ -66400,7 +66539,7 @@ function dressBoards() {
 }
 
 function dressMachine(m) {
-  /* the charm rack and the stool, both of which stand beside the machine */
+  /* the card rack and the stool, both of which stand beside the machine */
   if (MODELS.rack) {
     const inst = placeModel('rack', {
       pos: new THREE.Vector3(m.rackX, 0, m.tableZ - 0.06), height: RACK_H, rotationY: 0 });
@@ -66805,7 +66944,7 @@ function updatePrompt() {
             (game.clovers > 0 ? '[ R ] REROLL (1 CLOVER)     ' : '') +
             '[ F ] SEND IT AWAY';
   } else if (player.carrying && nearRack()) {
-    label = '[ E ] PLACE ' + charmById(player.carrying).name + ' HERE';
+    label = '[ E ] PLACE ' + cardById(player.carrying).name + ' HERE';
   } else if (nearStairs()) {
     if (game.dug >= DIG_MAX)   label = 'THE CHAIN WILL NOT LET YOU REACH ANY DEEPER';
     else if (game.shovel > 0)  label = '[ E ] DIG   (SHOVEL ' + game.shovel + ')';
@@ -66834,21 +66973,21 @@ function updatePrompt() {
   el.prompt.classList.toggle('on', !!label && player.locked && !focus.frozen);
   if (label) el.prompt.textContent = label;
 
-  /* the inspector: what the figurine you're looking at actually does */
+  /* the inspector: what the card you're looking at actually does */
   const looked = aimedShopItem();
   el.itemInfo.classList.toggle('on', !!looked && player.locked);
-  if (looked && el.itemShown !== looked.charm.id) {
-    el.itemShown = looked.charm.id;
-    const c = looked.charm;
-    el.iiKind.textContent = c.kind + (c.tier ? '  ' + c.tier : '');
+  if (looked && el.itemShown !== looked.card.id) {
+    el.itemShown = looked.card.id;
+    const c = looked.card;
+    el.iiKind.textContent = cardLabel(c) + (c.tier ? '  ' + c.tier : '');
     el.iiName.textContent = c.name;
     /* say what it leads to, so a cheap tier I reads as an opening rather than
        a weak buy — the ladder is invisible otherwise */
-    const nxt = CHARMS.find(x => x.needs && x.needs.includes(c.id));
+    const nxt = TAROT.find(x => x.needs && x.needs.includes(c.id));
     el.iiDesc.textContent = c.desc + (nxt ? '   → unlocks ' + nxt.name : '');
-    el.iiCost.textContent = charmCost(c);
+    el.iiCost.textContent = cardCost(c);
   }
-  if (looked) el.itemInfo.classList.toggle('poor', game.coins < charmCost(looked.charm));
+  if (looked) el.itemInfo.classList.toggle('poor', game.coins < cardCost(looked.card));
   if (!looked) el.itemShown = null;
 }
 
@@ -66859,7 +66998,7 @@ function step(dt) {
   updatePrompt();
   updateHorror(dt);
   updateModels(dt);
-  updateCharmFX(dt);
+  updateCardFX(dt);
   /* live clip time in the panel — cheap, and only while it's open */
   if (dev.open && (dev._t = (dev._t || 0) + dt) > 0.1) { dev._t = 0; devRender(); }
   updateChains();
@@ -66947,11 +67086,11 @@ function boot() {
                  enterFocus, exitFocus, showWatcher, sendHallWalker, triggerBlackout,
                  cutPower, setPower, doorBang, windowKnock, escalate, jumpScare,
                  settleRound, resetRun, roundQuota, roundSpins, breakIn,
-                 beginOffer, refreshBoards, charmCost, buffMult, charmCount, offerFreeCharm, charmPool, boonPool, spinCost, shop, payCollector, openShop, closeShop, charmFigure, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCharm,
+                 beginOffer, refreshBoards, cardCost, buffMult, cardCount, dealTarot, cardPool, boonPool, spinCost, shop, payCollector, openShop, closeShop, cardMesh, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCard,
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
                  buildSkinnedFigure, figureSkin,
-                 loadModel, spawnModel, psxifyModel, MODELS, offerFreeCharm, advanceAfterTribute, nearStairs, fundStairs, stairsBuilt,
-                 SYMBOLS, PATTERNS, CHARMS, CHARM_FX, BOARDS, spawnCharmToken, clearCharmTokens };
+                 loadModel, spawnModel, psxifyModel, MODELS, dealTarot, advanceAfterTribute, nearStairs, fundStairs, stairsBuilt,
+                 SYMBOLS, PATTERNS, TAROT, CARD_FX, BOARDS, spawnCardToken, clearCardTokens };
   animate();
 }
 
