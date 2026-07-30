@@ -72,7 +72,11 @@
     margin:-2.5px 0 0 -2.5px;background:#fff;opacity:.5;border-radius:50%}
   #prompt{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);
     font-size:clamp(13px,1.5vw,20px);background:#000;padding:8px 16px;
-    opacity:0;transition:opacity .12s;letter-spacing:1px;text-align:center}
+    opacity:0;transition:opacity .12s;letter-spacing:1px;text-align:center;
+    /* pre-wrap, not the default: every prompt separates its clauses with a run
+       of spaces and HTML was collapsing all of them to one, so "SEARCH THE
+       CRATES     COSTS 1 ENERGY" ran together into a single sentence */
+    white-space:pre-wrap;max-width:80vw}
   #prompt.on{opacity:1}
   #toast{position:absolute;left:50%;top:26%;transform:translateX(-50%);
     font-size:clamp(22px,3.4vw,48px);color:#ff4df0;opacity:0;
@@ -60161,7 +60165,7 @@ function buildTextures() {
     g.fillStyle = '#0b0708'; g.fillRect(0, 0, w, h);
     const PAD = 10;
     const HDR = Math.round(h * 0.085);
-    const ROW = (h - HDR - PAD * 2) / SYMBOLS.length;
+    const ROW = (h - HDR - PAD * 2) / BOARD_SYMBOLS.length;
     /* THE NAME COLUMN IS GONE. It was the widest thing on the board and the
        least useful: you match the picture on the reels, you never read the
        word "PENTAGRAM" off a wall from three metres away. Dropping it buys
@@ -60179,9 +60183,9 @@ function buildTextures() {
             w - PAD * 2 - C2 - 16, HDR * 0.50);
 
     const _m = (typeof myMachine !== 'undefined') ? myMachine : null;
-    const total = SYMBOLS.reduce((a, x) => a + weightOf(_m, x), 0);
+    const total = BOARD_SYMBOLS.reduce((a, x) => a + weightOf(_m, x), 0);
 
-    [...SYMBOLS].sort((a, b) => b.pay - a.pay).forEach((sym, i) => {
+    [...BOARD_SYMBOLS].sort((a, b) => b.pay - a.pay).forEach((sym, i) => {
       const y = PAD + HDR + i * ROW;
       g.fillStyle = i % 2 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.32)';
       g.fillRect(PAD, y, w - PAD * 2, ROW);
@@ -60440,7 +60444,7 @@ const blurPass = makePass(`
 const compPass = makePass(`
   uniform sampler2D tDiffuse, tBloom;
   uniform vec2  uRes;
-  uniform float uBloom, uVig, uAber, uTime, uShake, uMoon;
+  uniform float uBloom, uVig, uAber, uTime, uShake, uMoon, uDim;
   varying vec2 vUv;
 
   float bayer(vec2 p){
@@ -60478,6 +60482,12 @@ const compPass = makePass(`
 
     c = lin2srgb(max(c, 0.0));
 
+    /* THE NIGHT CLOSING IN. One multiply, driven by how deep into the night you
+       are — energy spent, then every pull taken under the moon. Doing it in the
+       composite rather than by dimming the lamps keeps the falloff even, so the
+       room does not just lose its highlights, it loses its far corners. */
+    c *= 1.0 - uDim * 0.62;
+
     /* BLOOD MOON. Done here rather than by retinting every light because the
        point is that the whole picture goes over — the greens and blues are
        crushed out of the room entirely, so it reads as a different night and
@@ -60507,7 +60517,7 @@ const compPass = makePass(`
     uRes:   { value: new THREE.Vector2(RW, RH) },
     uBloom: { value: 0.62 }, uVig: { value: 0.95 },
     uAber:  { value: 0.004 }, uTime: { value: 0 }, uShake: { value: 0 },
-    uMoon:  { value: 0 }
+    uMoon:  { value: 0 }, uDim: { value: 0 }
   });
 
 function resize() {
@@ -61272,9 +61282,16 @@ function buildMachine(idx) {
     m.rackFallback.add(p);
   });
   scene.add(m.rackFallback);
-  m.rackLight = new THREE.PointLight(0xffc060, 2.4, 1.7, 2);
-  m.rackLight.position.set(m.rackX, RACK_H * 0.62, m.tableZ + 0.50);
+  /* TWO lamps, and both further out than the single one that was here. A shelf
+     of cards you cannot read is a collection you do not feel like you own — one
+     point light at 1.7 m range reached the middle shelf and left the top and
+     bottom rows as dark slabs. */
+  m.rackLight = new THREE.PointLight(0xffc060, 3.6, 2.6, 2);
+  m.rackLight.position.set(m.rackX, RACK_H * 0.80, m.tableZ + 0.62);
   scene.add(m.rackLight);
+  m.rackLight2 = new THREE.PointLight(0xffb870, 2.8, 2.2, 2);
+  m.rackLight2.position.set(m.rackX, RACK_H * 0.28, m.tableZ + 0.58);
+  scene.add(m.rackLight2);
 
   /* ---- the stool you sit on + the winch drum the ankle-chain feeds off ---- */
   m.stoolFallback = buildStool(m.x, m.tableZ + 0.86);   /* swapped for seat.glb */
@@ -61312,7 +61329,15 @@ const SYMBOLS = [
   { id: 'clover',    w: 5,  pay: 60,  color: '#7ed321' },
   { id: 'skull',     w: 4,  pay: 110, color: '#e8f0ff' },
   { id: 'pentagram', w: 3,  pay: 200, color: '#ff2ec4' },
+  /* THE SIX. Weight 0, so it does not exist on a normal night — the moon is
+     what puts it on the strip, and weightOf() raises its odds the deeper into
+     the night you are. It pays like the top of the ladder because it has to be
+     a thing you WANT to see, and every one that lands writes a six on the
+     fuse. `hidden` keeps it off the wall board: you should meet it. */
+  { id: 'six',       w: 0,  pay: 240, color: '#ff2020', hidden: true },
 ];
+/* the board lists the honest ladder; the six is not on it */
+const BOARD_SYMBOLS = SYMBOLS.filter(s => !s.hidden);
 const WEIGHT_TOTAL = SYMBOLS.reduce((s, x) => s + x.w, 0);
 
 /* Paylines. Each NAMED pattern covers several concrete lines — HOR pays on
@@ -61357,7 +61382,27 @@ const PATTERNS = [
    that can't produce one of its own faces breaks every odds display on the
    wall and turns "rare" into "impossible". One helper so the reels and the
    symbol board can never disagree about what the odds are. */
+/* How likely a single cell comes up a six. Zero off the moon, and it climbs
+   with every pull you take under it — the fuse gets harder to avoid the longer
+   you stay out, rather than being a flat toll on each spin. */
+function sixChance() {
+  if (!game.moon) return 0;
+  /* Tuned against the real thing: 15 cells a grid, so a per-cell 0.030 start
+     already put a six on the fuse 37% of the time on your FIRST moon pull and
+     overtime was over in three or four. Starting at 0.012 makes the opening
+     pulls usually clean and the late ones genuinely lethal, which is the whole
+     point of the ramp. */
+  return Math.min(0.100, 0.012 + game.moonSpins * 0.010);
+}
+
 function weightOf(m, s) {
+  /* the six is not weighted like a symbol — it is solved backwards from the
+     per-cell chance above, so the tuning knob is a probability and not a number
+     that has to be re-derived every time the ladder changes */
+  if (s.id === 'six') {
+    const p = sixChance();
+    return p <= 0 ? 0 : WEIGHT_TOTAL * p / (1 - p);
+  }
   let w = s.w + (m ? buff(m, 'symWeight', s.id) : 0);
   if (s.id === 'clover' && m) w += buff(m, 'cloverWeight');
   /* CURSED REELS. Under the moon the strip empties out at the cheap end and
@@ -61567,6 +61612,22 @@ function drawSymbol(g, sym, cx, cy, s) {
       g.stroke();
       g.lineWidth = s * 0.042;
       g.beginPath(); g.arc(cx, cy, R * 1.06, 0, 6.283); g.stroke();
+      break;
+    }
+
+    /* --- the six. A numeral, drawn as one, because the fuse on the HUD is
+           numerals too and the player has to connect the two instantly. --- */
+    case 'six': {
+      g.shadowBlur = 22;
+      g.fillStyle = sym.color;
+      g.font = 'bold ' + Math.round(s * 0.86) + 'px "Arial Black", sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('6', cx, cy + s * 0.03);
+      /* a ring, so it reads as a token and not as a score */
+      g.strokeStyle = 'rgba(255,32,32,.55)';
+      g.lineWidth = s * 0.035;
+      g.beginPath(); g.arc(cx, cy, s * 0.40, 0, 6.283); g.stroke();
       break;
     }
   }
@@ -61989,7 +62050,7 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 /* one key for everything — whichever interactable you're actually facing */
 function interact() {
   if (!player.locked || focus.frozen) return;
-  if (dream.on)                        { takeDreamCard(); return; }
+  if (dream.on)                        { dreamInteract(); return; }
   if (focus.seated)                    { tryPull(); return; }
   if (aimedShopItem())                 { buyAimed(); return; }
   if (player.carrying && nearRack())   { placeCarried(); return; }
@@ -62273,13 +62334,20 @@ const game = {
   builtShovel: false,       /* once forged you keep the know-how — re-forging costs only coins */
   moon: 0,                  /* blood moon up? set by refusing the bed at zero energy */
   moonAsked: 0,             /* the first empty pull warns; the second calls it up */
+  moonSpins: 0,             /* pulls taken under it — drives six odds and the dimming */
   sixes: 0,                 /* the fuse — reset every time you actually sleep */
+  knocks: 0,                /* how many times it has hit the door tonight */
   searched: {},             /* which hiding places you have already turned over tonight */
 };
 
 /* The stairwell. A hole in the floor you pay to dig, one step at a time —
    a coin sink that competes with the tray and with what you owe the collector.
    Where it goes is the endgame, and the endgame is not built yet. */
+/* DIGGING IS OFF. Pulled 2026-07-30 to get the core loop — energy, the door,
+   the moon, her table — clean and readable on its own before an escape route is
+   layered back over it. Everything below still works; nothing builds it or
+   reaches it while this is false, so turning it back on is a one-word change. */
+const DIGGING = false;
 const STAIR_STEPS = 12;              /* how many step-meshes exist carved into the pit */
 const STAIR_PER_STEP = 120;          /* legacy — the dig is shovel-gated now, not paid per step */
 const STAIR_AT = new THREE.Vector3(2.25, 0, 1.55);
@@ -62305,7 +62373,28 @@ function spendEnergy(n, what) {
   }
   game.energy -= n;
   syncHUD();
+  checkEmpty();
   return true;
+}
+
+/* Running dry is what brings it to the door, and it has to fire whichever sink
+   took the last point — spending the pool on searches or on putting the fusebox
+   back used to drain it in total silence, and then nothing was at the door when
+   you went to bed. */
+function checkEmpty() {
+  if (game.energy <= 0 && !game.moon && !game.runOver && !game.offering && !game.paid) {
+    collectorArrives();
+  }
+}
+
+/* How far into the night you are, 0..1, as a single number the compositor can
+   dim by. Spending the pool takes most of it; everything after that is the moon.
+   Capped short of black — you still have to be able to see the door. */
+function nightDim() {
+  const spent = 1 - Math.max(0, game.energy) / Math.max(1, roundEnergy());
+  let d = spent * 0.34;
+  if (game.moon) d += 0.16 + game.moonSpins * 0.045 + game.sixes * 0.09;
+  return Math.min(0.80, d);
 }
 
 /* ---- blood moon -------------------------------------------------------- */
@@ -62324,20 +62413,23 @@ function endBloodMoon() {
   game.moon = 0;
   game.sixes = 0;
   game.moonAsked = 0;
+  game.moonSpins = 0;
   scene.fog.color.setHex(0x0e0705);
   syncHUD();
 }
 
-/* one more six on the fuse. Returns false when it was the last one — the
-   caller must not go on and spin, because there is nobody left to spin. */
-function addSix() {
-  game.sixes++;
-  horror.dread = Math.min(1, horror.dread + 0.3);
-  AUDIO.sting(); shakeCam(0.45 + game.sixes * 0.2);
+/* n more sixes on the fuse — they arrive off the REELS now, so a single spin
+   can land two or three at once. Returns false once the fuse is out. */
+function addSix(n = 1) {
+  for (let i = 0; i < n; i++) {
+    game.sixes++;
+    horror.dread = Math.min(1, horror.dread + 0.28);
+    if (game.sixes >= MOON_SIX) { syncHUD(); sixSixSix(); return false; }
+  }
+  AUDIO.sting(); shakeCam(0.35 + game.sixes * 0.22);
   syncHUD();
-  if (game.sixes >= MOON_SIX) { sixSixSix(); return false; }
-  toast(game.sixes === 1 ? 'SIX' : 'SIX SIX — ONE MORE AND IT HAS YOUR NUMBER', 3000);
-  paintTop(('6 '.repeat(game.sixes) + '_ '.repeat(MOON_SIX - game.sixes)).trim(), '#ff2a2a');
+  toast(game.sixes === 1 ? 'A SIX ON THE REELS'
+                         : 'SIX SIX — ONE MORE AND IT HAS YOUR NUMBER', 3000);
   return true;
 }
 
@@ -62615,9 +62707,16 @@ function spawnCardToken(mach, id, idx) {
   const perShelf = RACK_COLS;
   const shelf = ((idx / perShelf) | 0) % SHELF_Y.length;
   const col = idx % perShelf;
-  m.position.set(mach.rackX - 0.19 + col * 0.127,
+  /* SCALED UP AND SPREAD OUT. CARD_H was sized to the 0.233 m gap of the bare
+     fallback shelving, but the delivered rack.glb has much taller shelves — so
+     the tokens sat in the middle of them as unreadable little chips. They also
+     only used 0.38 m of a 1.13 m shelf, so there was width going spare. */
+  m.scale.multiplyScalar(1.65);
+  m.position.set(mach.rackX - 0.315 + col * 0.21,
                  SHELF_Y[shelf] * RACK_H + 0.012,
-                 mach.tableZ + 0.06);
+                 /* forward off the backboard, so the face catches the rack lamps
+                    instead of sitting in the shelf's own shadow */
+                 mach.tableZ + 0.13);
   /* barely any yaw — a face you cannot read is not worth painting */
   m.rotation.y = rand() * 0.16 - 0.08;
   scene.add(m);
@@ -62758,13 +62857,13 @@ function tryPull() {
   if (game.runOver || game.settling) return;
   const cost = spinCost(myMachine);
 
-  /* THE REFUSAL. Empty, the honest move is the bed. Pulling anyway is how the
-     blood moon gets called up — and it takes two pulls to do it, so nobody
-     walks into overtime by leaning on the key. */
+  /* THE REFUSAL. Empty, the honest move is to pay what is knocking and go to
+     bed. Pulling anyway is how the blood moon gets called up — and it takes two
+     pulls to do it, so nobody walks into overtime by leaning on the key. */
   if (game.energy < COST.spin && !game.moon) {
     if (!game.moonAsked) {
       game.moonAsked = 1;
-      toast('THERE IS NOTHING LEFT IN YOU. THE BED IS THERE. PULL AGAIN AND THE MOON COMES UP.', 4600);
+      toast('THERE IS NOTHING LEFT IN YOU. PAY IT AND SLEEP — OR PULL AGAIN AND THE MOON COMES UP.', 4800);
       paintTop('SLEEP — OR PULL AGAIN', '#ff3d3d');
       AUDIO.whisper();
       return;
@@ -62776,9 +62875,16 @@ function tryPull() {
   if (game.coins < cost) {
     toast('NOT EVEN ' + cost + ' LEFT', 2000); AUDIO.lose(); return;
   }
-  /* under the moon a pull is free of energy and paid for in sixes instead */
-  if (game.moon) { if (!addSix()) return; }
-  else           { game.energy -= COST.spin; }
+  /* Under the moon a pull costs no energy — it is paid for in sixes, and the
+     sixes come off the REELS now rather than one flat toll per pull. So a lucky
+     pull out here really is free and a late one very much is not. Each one also
+     buys another knock at the door, if it has not been paid yet. */
+  if (game.moon) {
+    game.moonSpins++;
+    if (game.offering && !game.paid) collectorKnock();
+  } else {
+    game.energy -= COST.spin;
+  }
   game.coins -= cost;
   spin(myMachine);
 }
@@ -62932,49 +63038,64 @@ function resolveSpin(m) {
   }
 
   syncHUD();
-  /* The night no longer ends itself. Running dry just means the only thing
-     left that costs nothing is lying down — and the bed is a thing you walk
-     to and press, so ending the night is a decision you make rather than a
-     counter hitting zero. Refusing it is the horror. */
-  if (game.energy <= 0 && !game.moon && !game.runOver) {
-    paintTop('EMPTY — THE BED', '#ffb524');
-    toast('NOTHING LEFT IN YOU — SLEEP IT OFF, OR DO NOT', 3200);
+
+  /* THE FUSE, read off the grid. Every six that landed is one more, and they
+     are counted after the pay so a line of sixes still banks its win before it
+     kills you — which is the whole joke of the symbol. */
+  if (game.moon) {
+    let sixes = 0;
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 5; c++) if (grid[r][c].id === 'six') sixes++;
+    if (sixes) { if (!addSix(sixes)) return; }
   }
+
+  /* The night no longer ends itself. Running dry brings the collector to the
+     door instead: pay it and the bed unlocks, or refuse and pull again. */
+  checkEmpty();
 }
 
-/* --- end of night: make the quota, or it comes through the door --- */
-function settleRound() {
-  game.settling = true;
-  setTimeout(() => {
-    game.settling = false;
-    if (game.coins >= game.quota) {
-      paintTop('NIGHT SURVIVED', '#7ed321');
-      toast('YOU MADE THE QUOTA', 2200);
-      AUDIO.win(200);
-      /* it comes to the door to collect — and to offer */
-      setTimeout(() => { if (!game.runOver) beginOffer(); }, 1700);
-    } else {
-      breakIn();
-    }
-    syncHUD();
-  }, 1500);
-}
+/* ---- the collector -----------------------------------------------------
+   It used to arrive at the END of a settled night, decide whether you had made
+   quota, and then run the card shop through the door slot. It does none of that
+   now. It arrives the moment you run dry, it wants paying, and that is all it
+   is for — the cards moved to the witch, and paying IS making the quota.
 
-/* ---- the collector: it wants the night's take, and it will not wait ---- */
-const COLLECT_SECONDS = 30;
+   The clock is what kills you if you stall, but it STOPS while the moon is up:
+   out there the threat is the fuse, not the timer, and running both at once
+   turned overtime into a coin-flip nobody could read. */
+const COLLECT_SECONDS = 45;
 
-function beginOffer() {
+function collectorArrives() {
+  if (game.offering || game.paid || game.runOver) return;
   game.offering = true;
+  game.knocks = 0;
   /* floored: THE HASTE sells time for damage, but never below a window you
      can actually cross the room in */
-  game.collectT = Math.max(18, COLLECT_SECONDS + buff(myMachine, 'timer'));
+  game.collectT = Math.max(24, COLLECT_SECONDS + buff(myMachine, 'timer'));
   horror.eyesT = 1;
-  horror.doorShake = 1;
-  AUDIO.bang(3);
   horror.dread = Math.min(1, horror.dread + 0.12);
-  toast('IT WANTS PAYING', 2600);
+  collectorKnock();
+  toast('SOMETHING IS AT THE DOOR. IT WANTS THE NIGHT\'S TAKE.', 3400);
   paintTop('GO TO THE DOOR', '#ffb524');
 }
+
+/* One knock, a little heavier than the last. Deliberately shallow growth and
+   hard-capped: the point is a door getting steadily more insistent over a
+   night, not a jump-scare ladder that tops out in ten seconds. */
+function collectorKnock() {
+  game.knocks = (game.knocks || 0) + 1;
+  const k = Math.min(1, (game.knocks - 1) / 9);        /* 0 -> 1 over 10 knocks */
+  AUDIO.bang(1.4 + k * 1.9);
+  horror.doorShake = Math.min(1, 0.45 + k * 0.55);
+  shakeCam(0.10 + k * 0.28);
+  horror.dread = Math.min(1, horror.dread + 0.02 + k * 0.04);
+  if (game.knocks === 4)  toast('IT KNOCKS AGAIN', 1800);
+  if (game.knocks === 8)  toast('IT IS NOT GOING AWAY', 2200);
+  if (game.knocks === 12) toast('THE FRAME IS GIVING', 2400);
+}
+
+/* kept as a thin alias: net.* and the dev panel both still call this name */
+function beginOffer() { collectorArrives(); }
 
 /* pay first; the tray only comes out once it has been paid */
 function payCollector() {
@@ -62988,7 +63109,10 @@ function payCollector() {
   game.coins -= owed;
   game.paid = true;
   AUDIO.win(200);
-  openShop();
+  /* NO SHOP HERE any more. It takes the money and goes; buying cards is the
+     witch's business and it happens once you are asleep. */
+  endBloodMoon();
+  horror.eyesT = 0;
 
   if (net.connected) {
     net.send({ t: 'paid' });
@@ -62996,7 +63120,8 @@ function payCollector() {
     toast('YOUR HALF IS IN', 1800);
   } else {
     game.collectT = 0;
-    toast('PAID', 1600);
+    toast('PAID — NOW SLEEP', 2600);
+    paintTop('GO TO BED', '#7a6ab0');
   }
   syncHUD();
 }
@@ -63004,12 +63129,12 @@ function payCollector() {
 /* ---- the shop: real figurines on a tray through the door slot ---- */
 const shop = { open: false, items: [], group: null };
 
-function openShop() {
-  closeShop();
+/* Which cards are for sale tonight. Pulled out of the old door-slot shop so the
+   witch's table and anything else can stock from the same rules. */
+function pickWares(n = 4) {
   const pool = cardPool();
-  if (!pool.length) { finishNight(); return; }
-
-  /* clovers are luck: each one nudges the tray toward the rarer figures */
+  if (!pool.length) return [];
+  /* clovers are luck: each one nudges the stock toward the rarer figures */
   const luck = Math.min(0.5, game.clovers * 0.02);
   const picks = [];
   /* ALWAYS stock the scaling engine. The quota is exponential, so a run lives
@@ -63019,14 +63144,25 @@ function openShop() {
      the path open; the escalating price is what keeps it honest. */
   const comp = pool.filter(c => c.engine);
   if (comp.length) picks.push(comp[(Math.random() * comp.length) | 0]);
-  while (picks.length < Math.min(4, pool.length)) {
-    /* the expensive end of the deck needs a roll to make the tray, and clovers
+  while (picks.length < Math.min(n, pool.length)) {
+    /* the expensive end of the deck needs a roll to make the table, and clovers
        are what improve that roll — the only reason `luck` exists */
     const weighted = pool.filter(c =>
       !picks.includes(c) && (c.cost < 150 || Math.random() < 0.25 + luck));
     const from = weighted.length ? weighted : pool.filter(c => !picks.includes(c));
     picks.push(from[(Math.random() * from.length) | 0]);
   }
+  return picks;
+}
+
+/* THE OLD DOOR-SLOT SHOP. No longer reachable: the collector takes money and
+   nothing else now, and the cards are sold at the witch's table. Left standing
+   because net.* and the dev panel both still name it, and because a tray coming
+   through that slot is a good scene to still have if it is ever wanted back. */
+function openShop() {
+  closeShop();
+  const picks = pickWares(4);
+  if (!picks.length) { finishNight(); return; }
 
   const g = new THREE.Group();
   /* the tray itself, poking through the slot */
@@ -63642,6 +63778,29 @@ function priceTag(c) {
   }, { smooth: true });
 }
 
+/* JUST THE NUMBER, for her table. The full priceTag above carries the card's
+   name and label, which is right for four figurines spaced out on a tray and
+   wrong for four cards fanned on a cloth — at that spacing the name-width tags
+   overlapped into one unreadable banner. The inspector panel names the card you
+   are aimed at, so the thing floating over it only has to be the price. */
+function coinTag(c) {
+  return makeTex(96, 96, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = 'rgba(8,5,6,.92)';
+    g.beginPath(); g.arc(w / 2, h / 2, 44, 0, 6.283); g.fill();
+    g.strokeStyle = '#ff8a1e'; g.lineWidth = 5;
+    g.beginPath(); g.arc(w / 2, h / 2, 44, 0, 6.283); g.stroke();
+    drawCoin(g, w / 2, 32, 13, '#ffd34d');
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    let fs = 34;
+    const txt = String(cardCost(c));
+    do { g.font = '900 ' + fs + 'px "Arial Black", sans-serif'; fs -= 1; }
+    while (fs > 14 && g.measureText(txt).width > 70);
+    g.fillStyle = '#ffffff';
+    g.fillText(txt, w / 2, 64);
+  }, { smooth: true });
+}
+
 /* whichever figurine you are actually looking at */
 const _toItem = new THREE.Vector3();
 function aimedShopItem() {
@@ -63719,6 +63878,9 @@ function placeCarried() {
 function rerollShop() {
   if (game.clovers < 1) { AUDIO.lose(); return; }
   if (!shop.open && !dream.on) { AUDIO.lose(); return; }
+  /* once the free card is taken the spread is gone, and a clover cannot buy back
+     a deal you have already made */
+  if (dream.on && dream.picked) { toast('YOU HAVE HAD YOUR CARD', 2000); AUDIO.lose(); return; }
   game.clovers--;
   /* a clover buys a fresh spread without leaving the table — enterDream is
      re-entrant, it clears the old fan and re-seats you at the same seat */
@@ -63739,7 +63901,7 @@ function dealTarot() {
   const pool = cardPool();
   /* while you still need shovel parts, one gets laid down with the spread —
      take the part and forgo the card, or take the card and stay chained longer */
-  const needParts = myMachine && !game.builtShovel && game.parts < SHOVEL_PARTS;
+  const needParts = DIGGING && myMachine && !game.builtShovel && game.parts < SHOVEL_PARTS;
   /* nothing left to deal — if this fired from a reroll we are already sitting
      at her table, so go out through wake() or the body never comes back */
   if ((!pool.length && !needParts && !boonPool().length) || !myMachine) {
@@ -63790,6 +63952,11 @@ const DREAM_AT = new THREE.Vector3(0, 0, -60);
 const dream = {
   on: false, group: null, cards: [], witch: null, motes: [],
   flames: [], t: 0, dealT: 0,
+  /* HER WARES. The collector used to run a tray of four buyable cards through
+     the door slot; that is hers now, and it happens here on the same cloth as
+     the free deal. Two arcs: the spread you take one of, nearer and lower, and
+     the ones she will sell you, behind it and raised on a step. */
+  wares: [], picked: false, waresLight: null,
 };
 
 function buildDreamRoom() {
@@ -63803,12 +63970,19 @@ function buildDreamRoom() {
   floor.position.set(X, 0.001, Z);
   g.add(floor);
 
-  /* the table: round, low, covered to the floor */
+  /* the table: round, low, covered to the floor. Wider than the first pass —
+     it carries two arcs of cards now, not one. */
   const cloth = lam({ map: TEX.stain, color: 0x4a2036 });
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.07, 20), cloth);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(1.18, 1.18, 0.07, 22), cloth);
   top.position.set(X, 0.95, Z); g.add(top);
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.90, 1.02, 0.92, 20, 1, true), cloth);
+  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(1.16, 1.28, 0.92, 22, 1, true), cloth);
   skirt.position.set(X, 0.48, Z); g.add(skirt);
+
+  /* NO SECOND ARC. Her wares first stood on a step across the back of the
+     cloth, which put them directly behind the free spread — so every sight line
+     to a price ran through a free card, `aimedDreamCard` won every tie, and the
+     things you were meant to be buying could not be aimed at OR seen. They use
+     the same front arc now, once the deal is done and the cloth is clear. */
 
   /* Three candles, all on HER side of the cloth. They started with one on the
      near edge, which put a lit wax column directly between the camera and the
@@ -63898,6 +64072,11 @@ function buildDreamRoom() {
   const onCards = new THREE.PointLight(0xffc27a, 3.0, 2.6, 2);
   onCards.position.set(X, 1.34, Z + 1.15);
   g.add(onCards);
+  /* a second, higher one on the same arc — the price tags sit half a metre above
+     the cards and the low lamp alone left them unreadable */
+  const onTags = new THREE.PointLight(0xffd7a0, 2.8, 2.4, 2);
+  onTags.position.set(X, 1.86, Z + 0.90);
+  g.add(onTags); dream.waresLight = onTags;
 
   /* dust turning slowly in the candlelight, so the void is not simply empty */
   /* fewer and bigger than the first pass: at 26 tiny spheres the low-res buffer
@@ -63917,7 +64096,7 @@ function buildDreamRoom() {
   dream.group = g;
 }
 
-/* lay the spread down on the table */
+/* lay the spread down on the table, and stand her wares up behind it */
 function enterDream(cards) {
   if (!dream.group) buildDreamRoom();
   clearDreamCards();
@@ -63931,26 +64110,10 @@ function enterDream(cards) {
     const a = (i - (n - 1) / 2) * spread;
     const R = 0.60;
     const wrap = new THREE.Group();
-    let mesh;
-    if (entry.part) {
-      /* the shovel part is not a card and should not look like one */
-      mesh = new THREE.Group();
-      const steel = lam({ map: TEX.metal, color: 0x8a8278 });
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.26, 0.03), steel);
-      blade.position.y = 0.13; mesh.add(blade);
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.115, 0.13, 4), steel);
-      tip.rotation.x = Math.PI; tip.position.y = -0.05; tip.rotation.y = Math.PI / 4;
-      mesh.add(tip);
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.30, 6),
-        lam({ map: TEX.wood, color: 0x6b4a2c }));
-      shaft.position.y = 0.40; mesh.add(shaft);
-      mesh.scale.setScalar(1.15);
-    } else {
-      mesh = cardMesh(entry.card);
-      mesh.scale.setScalar(1.7);
-    }
+    const mesh = cardMesh(entry.card);
+    mesh.scale.setScalar(1.7);
     wrap.add(mesh);
-    wrap.position.set(X + Math.sin(a) * R, 1.0, Z + 0.30 + Math.cos(a) * R * 0.42);
+    wrap.position.set(X + Math.sin(a) * R, 1.0, Z + 0.40 + Math.cos(a) * R * 0.42);
     wrap.rotation.y = -a * 0.8;
     /* dealt in, one at a time — dealT drives the slide-and-settle */
     wrap.visible = false;
@@ -63963,6 +64126,36 @@ function enterDream(cards) {
     });
   });
 
+  /* ---- her wares. Built now, shown later: they wait off-stage until the free
+     card has been taken, then stand up on the SAME arc the spread just left, so
+     every one of them is unoccluded and lit when it matters. ---- */
+  const stock = pickWares(4);
+  const wn = stock.length;
+  stock.forEach((c, i) => {
+    const wrap = new THREE.Group();
+    const mesh = cardMesh(c);
+    mesh.scale.setScalar(1.7);
+    wrap.add(mesh);
+    const tag = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.17, 0.17),
+      new THREE.MeshBasicMaterial({ map: coinTag(c), transparent: true, fog: false }));
+    /* above the card, not over it — on the old door tray the tag covered the
+       face and hid the exact thing you were choosing */
+    tag.position.set(0, 0.50, 0.03);
+    wrap.add(tag);
+    const spread = Math.min(0.34, 1.5 / Math.max(1, wn - 1));
+    const a = (i - (wn - 1) / 2) * spread;
+    const R = 0.60;
+    wrap.position.set(X + Math.sin(a) * R, 1.0, Z + 0.40 + Math.cos(a) * R * 0.42);
+    wrap.rotation.y = -a * 0.8;
+    wrap.visible = false;
+    dream.group.add(wrap);
+    dream.wares.push({ card: c, wrap, tag, sold: false,
+                       world: wrap.position.clone(), in: 0, delay: i * 0.17 });
+  });
+
+  dream.picked = false;
+  dream.sellT = 0;
   dream.dealT = 0;
   dream.on = true;
   dream.group.visible = true;
@@ -63974,21 +64167,23 @@ function enterDream(cards) {
   player.yaw = 0; player.pitch = -0.32;
   player.vel.set(0, 0, 0);
   paintTop('ASLEEP', '#7a6ab0');
-  toast('SOMETHING IS DEALING', 2600);
+  toast('SHE DEALS. TAKE ONE — AND SHE WILL SELL YOU THE REST.', 3600);
   AUDIO.whisper();
 }
 
 function clearDreamCards() {
   for (const c of dream.cards) dream.group.remove(c.wrap);
+  for (const w of dream.wares) dream.group.remove(w.wrap);
   dream.cards.length = 0;
+  dream.wares.length = 0;
 }
 
-/* whichever card you are actually looking at, same test the tray uses */
+/* whichever card you are actually looking at, same test the old tray used */
 const _toDream = new THREE.Vector3();
 function aimedDreamCard() {
-  if (!dream.on) return null;
+  if (!dream.on || dream.picked) return null;
   const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
-  let best = null, bestDot = 0.86;
+  let best = null, bestDot = 0.90;
   for (const c of dream.cards) {
     if (c.in < 0.9) continue;                      /* not landed yet */
     const d = _toDream.copy(c.world).sub(player.pos).normalize().dot(fwd);
@@ -63997,30 +64192,76 @@ function aimedDreamCard() {
   return best;
 }
 
-function takeDreamCard() {
+/* and whichever of her wares. Kept separate from the free spread so the two can
+   never be confused for one another — one costs nothing and ends the deal, the
+   other costs coins and does not. */
+function aimedDreamWare() {
+  /* not until the deal is done — before that they are not even on the cloth */
+  if (!dream.on || !dream.picked) return null;
+  const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
+  let best = null, bestDot = 0.94;
+  for (const w of dream.wares) {
+    if (w.sold || w.in < 0.9) continue;
+    const d = _toDream.copy(w.world).sub(player.pos).normalize().dot(fwd);
+    if (d > bestDot) { bestDot = d; best = w; }
+  }
+  return best;
+}
+
+/* one key, and the free spread wins ties — you should never buy by accident */
+function dreamInteract() {
   const c = aimedDreamCard();
-  if (!c) return;
-  if (c.entry.part) {
-    game.parts = Math.min(SHOVEL_PARTS, game.parts + 1);
-    AUDIO.win(120);
-    toast(game.parts >= SHOVEL_PARTS ? 'ALL THREE PARTS — FORGE IT AT THE DIRT'
-                                     : 'SHOVEL PART  ' + game.parts + ' / ' + SHOVEL_PARTS, 2800);
-    refreshStairs();
-  } else {
-    const card = c.entry.card;
-    myMachine.cards.push(card.id);
-    spawnCardToken(myMachine, card.id, myMachine.cards.length - 1);
-    refreshBoards();
-    AUDIO.win(140);
-    toast(card.name + (card.rev ? ' — REVERSED' : ' — DEALT'), 2600);
+  if (c) { takeDreamCard(c); return; }
+  const w = aimedDreamWare();
+  if (w) { buyDreamWare(w); return; }
+  if (dream.picked) wake();
+  else toast('TAKE ONE OFF THE CLOTH FIRST', 2200);
+}
+
+function takeDreamCard(c) {
+  if (!c || dream.picked) return;
+  const card = c.entry.card;
+  myMachine.cards.push(card.id);
+  spawnCardToken(myMachine, card.id, myMachine.cards.length - 1);
+  refreshBoards();
+  AUDIO.win(140);
+  toast(card.name + (card.rev ? ' — REVERSED' : ' — DEALT'), 2600);
+  dream.picked = true;
+  /* the rest of the spread is swept up, and what she will SELL you takes its
+     place on the same cloth — the deal, then the sale, never both at once */
+  for (const other of dream.cards) dream.group.remove(other.wrap);
+  dream.cards.length = 0;
+  dream.sellT = 0;
+  if (dream.wares.some(w => !w.sold)) {
+    setTimeout(() => {
+      if (dream.on) toast('AND THESE SHE WILL SELL YOU', 2800);
+    }, 700);
   }
   syncHUD();
-  wake();
+}
+
+function buyDreamWare(w) {
+  if (!w || w.sold) return;
+  const price = cardCost(w.card);
+  if (game.coins < price) {
+    toast('SHE WANTS ' + price + ' — YOU HAVE ' + game.coins, 2400);
+    AUDIO.lose(); return;
+  }
+  game.coins -= price;
+  w.sold = true;
+  dream.group.remove(w.wrap);
+  myMachine.cards.push(w.card.id);
+  spawnCardToken(myMachine, w.card.id, myMachine.cards.length - 1);
+  refreshBoards();
+  AUDIO.win(120);
+  toast(w.card.name + ' — BOUGHT', 2400);
+  syncHUD();
 }
 
 function wake() {
   if (!dream.on) return;
   dream.on = false;
+  toast('YOU SURFACE', 1800);
   ui.fadeTarget = 1;
   setTimeout(() => {
     dream.group.visible = false;
@@ -64031,8 +64272,19 @@ function wake() {
     player.pos.set(BED_AT.x - 1.05, 1.62, BED_AT.z);
     player.yaw = 0; player.pitch = 0;
     player.vel.set(0, 0, 0);
-    ui.fadeTarget = 0;
     advanceAfterTribute();
+    /* You come up out of the dark, not into daylight. The screen holds most of
+       the way black and it is a KNOCK that clears it — the same sound that will
+       end the night is what starts it, which is the whole shape of the loop. */
+    ui.fade = 1; ui.fadeTarget = 0.55;
+    setTimeout(() => {
+      if (game.runOver) { ui.fadeTarget = 0; return; }
+      AUDIO.bang(2.2);
+      horror.doorShake = 0.8;
+      shakeCam(0.3);
+      ui.fadeTarget = 0;
+      toast('IT KNOCKS. NIGHT ' + game.round + '.', 3000);
+    }, 1100);
   }, 900);
 }
 
@@ -64074,6 +64326,18 @@ function updateDream(dt) {
     c.world.copy(c.wrap.position);
     if (c.in >= 1) c.world.copy(c.at);
   }
+  /* her wares rise once the deal is done, onto the arc the spread just left */
+  if (dream.picked) {
+    dream.sellT += dt;
+    for (const w of dream.wares) {
+      if (w.sold || dream.sellT < w.delay || w.in >= 1) continue;
+      if (w.in === 0) { w.wrap.visible = true; if (AUDIO.started) AUDIO.leverClunk(); }
+      w.in = Math.min(1, w.in + dt * 3.0);
+      const k = w.in * w.in * (3 - 2 * w.in);
+      w.wrap.scale.setScalar(0.5 + 0.5 * k);
+      w.wrap.position.y = w.world.y - (1 - k) * 0.22;
+    }
+  }
 }
 
 function advanceAfterTribute() {
@@ -64100,6 +64364,7 @@ function nextNight() {
   game.quota = roundQuota(game.round);
   game.energy = roundEnergy();
   game.searched = {};                 /* the room refills its hiding places */
+  game.knocks = 0;
   endBloodMoon();
   game.coins = Math.max(0, game.coins + buff(myMachine, 'head'));   /* DEEP POCKETS, HOLLOW HANDS */
   game.clovers += buff(myMachine, 'clovers');       /* GLEANER */
@@ -65019,6 +65284,7 @@ function refreshStairs() {
 
 const _toStair = new THREE.Vector3();
 function nearStairs() {
+  if (!DIGGING) return false;
   /* it's a hole in the floor — proximity is enough, you stand right over it.
      Tightened from 1.35: at that reach the dig owned the entire south-east
      quadrant and swallowed the prompt for everything else put down there. */
@@ -65150,47 +65416,53 @@ function bedBeatsDig() {
 }
 
 function sleep() {
-  if (game.runOver || game.settling || game.offering || shop.open) return;
-  if (dream.on) return;
+  if (game.runOver || game.settling || dream.on) return;
+
+  /* It has to be paid before you are allowed to stop. Lying down while it is
+     still owed does not end the night — it just tells the thing at the door
+     exactly where you are. */
+  if (!game.paid) {
+    if (!game.offering) {
+      toast('SOMETHING HEARS YOU LIE DOWN', 2800);
+      collectorArrives();
+    } else {
+      toast('IT IS STILL AT THE DOOR — ' + Math.max(0, myShare() - game.coins) +
+            ' SHORT OF WHAT IT WANTS', 3000);
+      collectorKnock();
+    }
+    return;
+  }
+
   endBloodMoon();
   if (focus.seated) exitFocus();
+  game.settling = true;
   toast('YOU LIE DOWN', 2000);
   paintTop('ASLEEP', '#7a6ab0');
   AUDIO.whisper();
   ui.fadeTarget = 1;
-  /* black first, verdict second — waking up to the answer is the beat */
-  setTimeout(() => { ui.fadeTarget = 0; settleRound(); }, 1500);
+  /* black first, then her table — the cut is the beat */
+  setTimeout(() => {
+    game.settling = false;
+    if (game.runOver) { ui.fadeTarget = 0; return; }
+    dealTarot();                 /* enters the dream; it advances the night */
+    ui.fadeTarget = 0;
+  }, 1500);
 }
 
 /* ---- searching the room: the cheap sink, and where the parts come from --
    Three hiding places, one energy each, once per night. This is the third
    rate in the pool — without it "energy" would just be the spin counter
    under a new name. */
-/* All three hang off furniture the room already had, and all three sit outside
-   every other interaction radius — the dirt heap and the underside of the cot
-   were the first picks and both lost to the dig and the bed respectively. */
+/* BOTH hang off furniture the room already had, and both sit outside every other
+   interaction radius. There were three: a "dark corner" pile against the west
+   wall, cut because the west wall is where you stand to read the left machine's
+   card shelf — the search prompt came up over the rack every single time. The
+   dirt heap and the underside of the cot were the other two candidates and lost
+   to the dig and the bed respectively. Two is enough for a per-night sink. */
 const SEARCH_SPOTS = [
-  { id: 'crates', at: new THREE.Vector3(3.28, 0.55, 2.35),  label: 'THE STACK OF CRATES' },
-  { id: 'crt',    at: new THREE.Vector3(3.42, 0.40, 1.45),  label: 'BEHIND THE DEAD SET' },
-  { id: 'corner', at: new THREE.Vector3(-3.05, 0.16, -1.65), label: 'THE DARK CORNER' },
+  { id: 'crates', at: new THREE.Vector3(3.28, 0.55, 2.35), label: 'THE STACK OF CRATES' },
+  { id: 'crt',    at: new THREE.Vector3(3.42, 0.40, 1.45), label: 'BEHIND THE DEAD SET' },
 ];
-
-function buildSearchSpots() {
-  const junk = lam({ map: TEX.wall, color: 0x3b2c22 });
-  /* only the corner needs anything built — the crates and the set are already
-     furniture, and a search prompt on real geometry reads better than a new
-     pile nobody believes in */
-  const s = SEARCH_SPOTS[2];
-  for (let i = 0; i < 7; i++) {
-    const bit = new THREE.Mesh(
-      i % 3 ? new THREE.BoxGeometry(0.26 + rand() * 0.3, 0.05, 0.09)
-            : new THREE.DodecahedronGeometry(0.05 + rand() * 0.04), junk);
-    bit.position.set(s.at.x + (rand() - 0.5) * 0.7, 0.03 + (i % 3) * 0.05,
-                     s.at.z + (rand() - 0.5) * 0.7);
-    bit.rotation.set(rand() * 0.3, rand() * 3, rand() * 0.3);
-    scene.add(bit);
-  }
-}
 
 const _toSpot = new THREE.Vector3();
 function nearSearchSpot() {
@@ -65214,7 +65486,7 @@ function searchSpot() {
   game.searched[s.id] = 1;
   if (AUDIO.started) AUDIO.burst(0.3, 'lowpass', 420, 1, 0.2);
 
-  const needParts = !game.builtShovel && game.parts < SHOVEL_PARTS;
+  const needParts = DIGGING && !game.builtShovel && game.parts < SHOVEL_PARTS;
   const r = Math.random();
   /* while you still need parts, the room mostly gives you parts — the escape
      should not be gated behind a coin flip you cannot influence */
@@ -65223,7 +65495,7 @@ function searchSpot() {
     AUDIO.win(120);
     toast(game.parts >= SHOVEL_PARTS ? 'A SHOVEL PART — ALL THREE. FORGE IT AT THE DIRT.'
                                      : 'A SHOVEL PART  ' + game.parts + ' / ' + SHOVEL_PARTS, 3000);
-  } else if (r < 0.72) {
+  } else if (r < 0.74) {
     const found = 8 + ((Math.random() * 22) | 0);
     game.coins += found;
     AUDIO.win(60);
@@ -65436,17 +65708,25 @@ function updateHorror(dt) {
   updateHallWalk(dt);
   updateCollectorWalk(dt);
 
-  /* the collection clock — run it out and it stops asking */
-  if (game.offering && !game.paid && game.collectT > 0 && !game.runOver) {
-    game.collectT -= dt;
-    if (game.collectT < 10 && Math.random() < dt * 0.8) {
-      horror.doorShake = 1; AUDIO.bang(1);      /* it gets impatient */
+  /* The collection clock. It STOPS while the moon is up — out there the threat
+     is the fuse, and running a countdown as well made overtime unreadable. It
+     keeps knocking either way. */
+  if (game.offering && !game.paid && !game.runOver) {
+    if (!game.moon && game.collectT > 0) {
+      game.collectT -= dt;
+      if (game.collectT <= 0) {
+        game.collectT = 0;
+        /* nobody handed it over */
+        if (!net.connected || !net.everyonePaid()) breakIn();
+      }
     }
-    if (game.collectT <= 0) {
-      game.collectT = 0;
-      /* someone did not hand theirs over */
-      if (!net.connected || !net.everyonePaid()) breakIn();
-    }
+    /* a knock every few seconds for as long as it is owed, closing up as the
+       clock runs down so the last stretch is genuinely hurried */
+    const gap = game.moon ? 3.4 : 1.6 + Math.max(0, game.collectT) * 0.07;
+    horror.knockT = (horror.knockT || 0) + dt;
+    if (horror.knockT >= gap) { horror.knockT = 0; collectorKnock(); }
+  } else {
+    horror.knockT = 0;
   }
 
   /* dread decays whenever nothing is provoking it; IRON NERVE / GREED bend it */
@@ -65513,6 +65793,12 @@ function updateHorror(dt) {
     const u = compPass.mat.uniforms.uMoon;
     const want = game.moon && !dream.on ? 1 : 0;
     u.value += (want - u.value) * Math.min(1, dt * 1.4);
+  }
+  /* and the night itself closing in, on the same slow ease. The dream is its
+     own place and is never dimmed by how bad the night got. */
+  {
+    const u = compPass.mat.uniforms.uDim;
+    u.value += ((dream.on ? 0 : nightDim()) - u.value) * Math.min(1, dt * 0.9);
   }
 
   /* --- the watcher --- */
@@ -67573,11 +67859,11 @@ function render() {
 
 /* the most important line in the game, so it says exactly what happens */
 function bedLabel() {
-  if (game.offering || shop.open || game.settling) return 'NOT YET — IT IS AT THE DOOR';
-  if (game.moon)   return '[ E ] SLEEP — THE MOON GOES DOWN AND THE SIXES CLEAR';
-  if (game.coins >= game.quota)
-    return '[ E ] SLEEP — END NIGHT ' + game.round + ', QUOTA MET';
-  return '[ E ] SLEEP — YOU ARE ' + (game.quota - game.coins) + ' SHORT. IT WILL COME IN.';
+  if (game.settling)  return 'ASLEEP';
+  if (game.paid)      return '[ E ] SLEEP — SHE IS WAITING';
+  if (game.offering)  return '[ E ] LIE DOWN ANYWAY — IT IS ' +
+                             Math.max(0, myShare() - game.coins) + ' SHORT AND IT WILL HEAR YOU';
+  return '[ E ] SLEEP — IT WILL COME FOR ' + myShare() + ' FIRST';
 }
 
 function updatePrompt() {
@@ -67591,10 +67877,15 @@ function updatePrompt() {
     return;
   }
   if (dream.on) {
-    const c = aimedDreamCard();
-    label = c ? (c.entry.part ? '[ E ] TAKE THE PART'
-                              : '[ E ] TAKE ' + c.entry.card.name)
-              : 'TAKE ONE' + (game.clovers > 0 ? '     [ R ] A CLOVER FOR A NEW SPREAD' : '');
+    const c = aimedDreamCard(), w = aimedDreamWare();
+    if (c)            label = '[ E ] TAKE ' + c.entry.card.name + ' — FREE';
+    else if (w)       label = '[ E ] BUY ' + w.card.name + ' — ' + cardCost(w.card) +
+                              (game.coins < cardCost(w.card) ? '  (YOU HAVE ' + game.coins + ')' : '');
+    else if (!dream.picked)
+      label = 'TAKE ONE OFF THE CLOTH' +
+              (game.clovers > 0 ? '     [ R ] A CLOVER FOR A NEW SPREAD' : '');
+    else label = '[ E ] WAKE' + (dream.wares.some(x => !x.sold)
+                 ? '     — OR BUY WHAT IS LEFT ON THE STEP' : '');
   } else if (focus.seated) {
     const fm = focus.machine;
     if ((fm && fm.reels.spinning) || game.settling) label = '[ Q ] STAND UP';
@@ -67656,7 +67947,12 @@ function updatePrompt() {
   if (label) el.prompt.textContent = label;
 
   /* the inspector: what the card you're looking at actually does */
-  const looked = aimedShopItem();
+  /* The inspector now reads whatever card you are aimed at, wherever it is: the
+     old door tray, her wares, or the free spread on the cloth. Buying blind was
+     the one thing that made the move to a 3D shop worse than the DOM overlay. */
+  const aimedW = dream.on ? aimedDreamWare() : null;
+  const aimedC = dream.on ? aimedDreamCard() : null;
+  const looked = aimedShopItem() || aimedW || (aimedC ? { card: aimedC.entry.card, free: 1 } : null);
   el.itemInfo.classList.toggle('on', !!looked && player.locked);
   if (looked && el.itemShown !== looked.card.id) {
     el.itemShown = looked.card.id;
@@ -67666,10 +67962,13 @@ function updatePrompt() {
     /* say what it leads to, so a cheap tier I reads as an opening rather than
        a weak buy — the ladder is invisible otherwise */
     const nxt = TAROT.find(x => x.needs && x.needs.includes(c.id));
-    el.iiDesc.textContent = c.desc + (nxt ? '   → unlocks ' + nxt.name : '');
-    el.iiCost.textContent = cardCost(c);
+    const have = cardCount(c.id);
+    el.iiDesc.textContent = c.desc + (have ? '   (held x' + have + ')' : '') +
+                            (nxt ? '   → unlocks ' + nxt.name : '');
+    el.iiCost.textContent = looked.free ? 'FREE' : cardCost(c);
   }
-  if (looked) el.itemInfo.classList.toggle('poor', game.coins < cardCost(looked.card));
+  if (looked) el.itemInfo.classList.toggle('poor',
+    !looked.free && game.coins < cardCost(looked.card));
   if (!looked) el.itemShown = null;
 }
 
@@ -67722,9 +68021,8 @@ function boot() {
   assignMachines();
   buildHorror();
   buildDressing();
-  buildStairs();
+  if (DIGGING) buildStairs();
   buildBed();
-  buildSearchSpots();
   buildChains();
   loadDeliveredModels();
 
@@ -67771,11 +68069,13 @@ function boot() {
                  step, spin, nearMachine, nearDoor, nearFuse, tryDoor, tryFuse,
                  enterFocus, exitFocus, showWatcher, sendHallWalker, triggerBlackout,
                  cutPower, setPower, doorBang, windowKnock, escalate, jumpScare,
-                 settleRound, resetRun, roundQuota, roundEnergy, breakIn,
+                 resetRun, roundQuota, roundEnergy, breakIn,
                  sleep, nearBed, BED_AT, spendEnergy, COST, dream, enterDream, wake,
                  beginBloodMoon, endBloodMoon, addSix, searchSpot, SEARCH_SPOTS,
                  tryPull, takeDreamCard, aimedDreamCard, syncHUD, nearSearchSpot,
-                 updatePrompt, interact, MOON_SIX, MOON_PAY,
+                 updatePrompt, interact, MOON_SIX, MOON_PAY, DIGGING,
+                 collectorArrives, collectorKnock, nightDim, sixChance, pickWares,
+                 aimedDreamWare, buyDreamWare, dreamInteract, BOARD_SYMBOLS,
                  beginOffer, refreshBoards, cardCost, buffMult, cardCount, dealTarot, cardPool, boonPool, spinCost, shop, payCollector, openShop, closeShop, cardMesh, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCard,
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
                  buildSkinnedFigure, figureSkin,
