@@ -25,9 +25,27 @@
   .cur.gold{color:#ffd34d}
   .cur.clv{color:#8fe038;font-size:clamp(15px,1.8vw,24px)}
   .cur .d{font-size:.55em;color:#7a6a58;letter-spacing:2px;margin-left:.35em}
-  #spinPips{display:flex;gap:3px;margin-top:8px;flex-wrap:wrap;max-width:190px}
-  #spinPips i{width:9px;height:9px;background:#ff8a1e;display:block}
+  .elbl{display:block;margin-top:9px;font-size:clamp(9px,1vw,12px);
+    color:#7a6a58;letter-spacing:2px}
+  #spinPips{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;max-width:190px}
+  #spinPips i{width:11px;height:11px;background:#ff8a1e;display:block}
   #spinPips i.used{background:#3a2418}
+  /* empty: the remaining pips are gone, so the row itself has to say so */
+  #spinPips.spent i{background:#5c1414}
+
+  /* THE FUSE. Top-centre, directly under the night counter, only while the moon
+     is up — three sixes filling one at a time is the whole tell. It sat above
+     the prompt first and the prompt (which wraps to two lines under the moon)
+     painted straight over it. */
+  #fuse{position:absolute;left:50%;top:88px;transform:translateX(-50%);
+    display:none;gap:16px;padding:6px 22px;background:rgba(24,2,4,.78);
+    border:2px solid #5c1418}
+  #fuse.on{display:flex}
+  /* the unlit slots are GREY, not dark red — under the moon the whole picture is
+     red and a red-on-red six read as nothing at all */
+  #fuse b{font-size:clamp(24px,3.4vw,44px);line-height:1;color:#514850;
+    font-family:"Arial Black",sans-serif}
+  #fuse b.lit{color:#ff2020;text-shadow:0 0 14px #ff2020,0 0 34px #8c0000}
 
   #hudTR{top:0;right:0;padding:9px 14px 10px;display:flex;gap:6px;
     flex-direction:column;align-items:flex-end;
@@ -198,13 +216,17 @@
       <svg viewBox="0 0 24 24" fill="none"><g fill="#7ed321"><circle cx="8" cy="8" r="5"/><circle cx="16" cy="8" r="5"/><circle cx="8" cy="16" r="5"/><circle cx="16" cy="16" r="5"/></g><rect x="11" y="11" width="2" height="11" fill="#4a8f14"/></svg>
       <span class="v" id="clovers">0</span>
     </div>
+    <span class="elbl">ENERGY</span>
     <div id="spinPips"></div>
   </div>
 
   <div class="box" id="hudTR">
-    <span class="ttl">CHARMS</span>
+    <span class="ttl">THE HAND</span>
     <div id="buffList"></div>
   </div>
+
+  <!-- the 666 fuse. Only on while the blood moon is up. -->
+  <div id="fuse"></div>
 
   <div class="box" id="hudRound">
     <span class="rl">NIGHT <span id="round">1</span></span>
@@ -272,11 +294,7 @@
     M — mute &nbsp;&nbsp;·&nbsp;&nbsp; ESC — pause &amp; settings
   </p>
   <p style="color:#5e4a3c;letter-spacing:1px">headphones recommended</p>
-  <div class="go" id="goSolo">PLAY ALONE</div>
-  <div class="coop">
-    <input id="roomCode" maxlength="8" placeholder="ROOM CODE" autocomplete="off" spellcheck="false">
-    <div class="go alt" id="goCoop">JOIN</div>
-  </div>
+  <div class="go" id="goSolo">DESCEND</div>
   <p id="netNote" style="color:#5e4a3c;letter-spacing:1px;font-size:12px"></p>
 </div>
 <div id="load">LOADING…</div>
@@ -60422,7 +60440,7 @@ const blurPass = makePass(`
 const compPass = makePass(`
   uniform sampler2D tDiffuse, tBloom;
   uniform vec2  uRes;
-  uniform float uBloom, uVig, uAber, uTime, uShake;
+  uniform float uBloom, uVig, uAber, uTime, uShake, uMoon;
   varying vec2 vUv;
 
   float bayer(vec2 p){
@@ -60460,6 +60478,14 @@ const compPass = makePass(`
 
     c = lin2srgb(max(c, 0.0));
 
+    /* BLOOD MOON. Done here rather than by retinting every light because the
+       point is that the whole picture goes over — the greens and blues are
+       crushed out of the room entirely, so it reads as a different night and
+       not as a red lamp someone switched on. */
+    c = mix(c, vec3(c.r * 1.10 + 0.055 + (c.g + c.b) * 0.16,
+                    c.g * 0.26 + c.r * 0.05,
+                    c.b * 0.30 + c.r * 0.04), uMoon);
+
     /* scanlines + dither on the LOW-RES grid, not the screen grid */
     vec2 px = uv * uRes;
     c *= 1.0 - 0.042 * step(0.5, fract(px.y * 0.5));
@@ -60480,7 +60506,8 @@ const compPass = makePass(`
     tDiffuse: { value: null }, tBloom: { value: null },
     uRes:   { value: new THREE.Vector2(RW, RH) },
     uBloom: { value: 0.62 }, uVig: { value: 0.95 },
-    uAber:  { value: 0.004 }, uTime: { value: 0 }, uShake: { value: 0 }
+    uAber:  { value: 0.004 }, uTime: { value: 0 }, uShake: { value: 0 },
+    uMoon:  { value: 0 }
   });
 
 function resize() {
@@ -61333,6 +61360,11 @@ const PATTERNS = [
 function weightOf(m, s) {
   let w = s.w + (m ? buff(m, 'symWeight', s.id) : 0);
   if (s.id === 'clover' && m) w += buff(m, 'cloverWeight');
+  /* CURSED REELS. Under the moon the strip empties out at the cheap end and
+     fills up at the top, which is what makes overtime feel like a different
+     machine rather than the same one paying more. It also thins the clover,
+     so the moon gives you money and takes away your rerolls. */
+  if (game.moon) w *= (s.pay >= 45 ? 2.4 : s.id === 'clover' ? 0.45 : 0.7);
   return Math.max(1, w);
 }
 function rollSymbol(m) {
@@ -61662,7 +61694,6 @@ function drawCoin(g, cx, cy, r, color) {
    your last two, because running out is what ends the night. */
 function paintDeck(m = myMachine) {
   if (!m || !m.deck) return;
-  const left = roundSpins() - game.spins;      /* pips used, for the x/y read */
   const draw = (d, text, color) => {
     const g = d.ctx, W = d.w;
     g.fillStyle = '#050203'; g.fillRect(0, 0, W, 32);
@@ -61674,9 +61705,15 @@ function paintDeck(m = myMachine) {
     g.shadowBlur = 0;
     d.tex.needsUpdate = true;
   };
-  const spins = Math.max(0, game.spins);
-  draw(m.deck.rounds, spins + ' / ' + roundSpins(),
-       spins === 0 ? '#ff3d3d' : spins <= 2 ? '#ffb524' : '#ffd66a');
+  /* under the moon the plate stops counting energy and starts counting sixes,
+     because that is the number that can kill you now */
+  if (game.moon) {
+    draw(m.deck.rounds, game.sixes + ' / ' + MOON_SIX, '#ff2a2a');
+  } else {
+    const e = Math.max(0, game.energy);
+    draw(m.deck.rounds, e + ' / ' + roundEnergy(),
+         e === 0 ? '#ff3d3d' : e <= 2 ? '#ffb524' : '#ffd66a');
+  }
   /* green when a card has actually knocked the price down, same tell the
      wall boards use for a buffed number */
   const cost = spinCost(m);
@@ -61952,13 +61989,19 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 /* one key for everything — whichever interactable you're actually facing */
 function interact() {
   if (!player.locked || focus.frozen) return;
+  if (dream.on)                        { takeDreamCard(); return; }
   if (focus.seated)                    { tryPull(); return; }
   if (aimedShopItem())                 { buyAimed(); return; }
   if (player.carrying && nearRack())   { placeCarried(); return; }
+  if (nearBed() && bedBeatsDig())      { sleep(); return; }
   if (nearStairs())                    { fundStairs(); return; }
   if (nearFuse())                      { tryFuse(); return; }
+  /* the bed outranks the machine and the search — it is the one thing you must
+     never have to hunt for the angle on */
+  if (nearBed())                       { sleep(); return; }
   const nm = nearMachine();
   if (nm)                              { enterFocus(nm); return; }
+  if (nearSearchSpot())                { searchSpot(); return; }
   if (nearDoor())                      { tryDoor(); return; }
 }
 
@@ -62013,6 +62056,10 @@ function enterGame() {
 }
 
 document.getElementById('goSolo').addEventListener('click', enterGame);
+/* CO-OP ENTRY REMOVED. The join box is gone from the gate, so these bindings
+   only run if something puts it back — kept live rather than deleted because
+   net.* underneath them still works and the relay is still deployed. */
+if (document.getElementById('goCoop')) {
 document.getElementById('goCoop').addEventListener('click', () => {
   const code = (document.getElementById('roomCode').value || '').trim();
   if (!code) { document.getElementById('roomCode').focus(); return; }
@@ -62022,6 +62069,7 @@ document.getElementById('roomCode').addEventListener('keydown', e => {
   e.stopPropagation();                       /* don't let WASD leak into the room code */
   if (e.code === 'Enter') document.getElementById('goCoop').click();
 });
+}
 
 function updatePlayer(dt) {
   /* ease between free-roam and parked-at-the-machine */
@@ -62034,7 +62082,9 @@ function updatePlayer(dt) {
 
   /* noclip ignores the seated lock too — otherwise you can get stuck parked at
      a machine with no way to fly off and look at anything. */
-  const held = (focus.seated || focus.blend > 0) && !dev.noclip;
+  /* the dream holds you at the table — you can look anywhere you like, but you
+     do not get to walk away from it */
+  const held = ((focus.seated || focus.blend > 0) || dream.on) && !dev.noclip;
 
   const speed = dev.noclip ? dev.speed : 2.5;
   const fwd = held ? 0 : (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
@@ -62057,6 +62107,13 @@ function updatePlayer(dt) {
     player.pos.z += player.vel.z * dt;
     const up = (keys.Space ? 1 : 0) - (keys.ControlLeft || keys.ShiftLeft ? 1 : 0);
     player.pos.y = clamp(player.pos.y + up * dev.speed * dt, -4, 12);
+  } else if (dream.on) {
+    /* The dream sits sixty metres out, and moveAxis clamps to the ROOM's walls
+       on every call regardless of how far it was asked to move — so leaving
+       this to the normal path snapped the body straight back to the north wall
+       on the first frame and the table was never on screen at all. Nothing to
+       collide with out here anyway: movement is held. */
+    if (player.pos.y !== 1.62) player.pos.y = 1.62;
   } else {
     moveAxis('x', player.vel.x * dt);
     moveAxis('z', player.vel.z * dt);
@@ -62136,7 +62193,22 @@ function moveAxis(axis, amount) {
    it to descend, miss it and the run ends. Quota curve and spin grant were
    picked against the simulation — expected score is ~153/round at 12 spins,
    so round 1 is comfortable and round 4+ needs luck. */
+/* ENERGY, not spins. A night is one pool, and everything you can do in this
+   room draws on it at a DIFFERENT rate — that spread is the whole reason the
+   pool exists. Spins and digging used to run on two unrelated economies
+   (coins vs. shovel uses), so "gamble or get out" was never actually a
+   decision you made; now every step you dig is two pulls you gave up.
+   HELD AT 9 on purpose: a spin costs 1, so a night spent entirely on the
+   lever is exactly the nine pulls the quota curve below was simulated
+   against. The curve stays valid; only the alternatives are new. */
 const BASE_SPINS = 9;
+const COST = {
+  spin:   1,
+  dig:    2,     /* the way out is the most expensive thing in the room */
+  forge:  2,     /* and building the tool costs a night's worth on its own */
+  search: 1,
+  fuse:   1,     /* a blackout now costs you the night, not just the walk */
+};
 /* Sized against the simulation: ~11 coins/spin average, so 14 spins gross
    ~154 and cost 42. That clears night 1 and 2 comfortably and goes negative
    from night 3, which is where the deck is supposed to take over. */
@@ -62163,7 +62235,14 @@ const nightTotal = () => roundQuota(game.round) * playerCount();
 const myShare    = () => Math.ceil(nightTotal() / playerCount());
 /* floored at 2 — CURSE boons trade spins for multipliers, and a night with no
    pulls in it is not a hard night, it is a broken one */
-const roundSpins = () => Math.max(2, BASE_SPINS + buff(myMachine, 'extraSpins'));
+const roundEnergy = () => Math.max(2, BASE_SPINS + buff(myMachine, 'extraSpins'));
+/* BLOOD MOON. Refuse the bed and the night runs into overtime: pulls cost no
+   energy, the reels turn cursed, the pays turn fat — and every pull writes
+   another six. Three and the room has your number. Sized as GREED, not
+   desperation: nine energy still clears a normal quota, so overtime is how
+   you get AHEAD rather than a tax every run has to pay. */
+const MOON_PAY  = 2.6;    /* every win, while the moon is up */
+const MOON_SIX  = 3;      /* 6 _ _ -> 6 6 _ -> dead */
 
 const game = {
   /* Starting float. SPIN_COST is 3 and a night is 9 spins, so a run needs 27
@@ -62171,7 +62250,7 @@ const game = {
      afford the first pull. 60 covers the full night with a little slack while
      still leaving night 1's quota of 70 as a real target you have to win. */
   coins: 60,
-  spins: BASE_SPINS,
+  energy: BASE_SPINS,
   clovers: 0,
   lastWin: 0,
   round: 1,                 /* the night you're on */
@@ -62192,6 +62271,10 @@ const game = {
   parts: 0,                 /* shovel parts scavenged so far (0..SHOVEL_PARTS) */
   shovel: 0,                /* digs left on the current shovel (0 = none / snapped) */
   builtShovel: false,       /* once forged you keep the know-how — re-forging costs only coins */
+  moon: 0,                  /* blood moon up? set by refusing the bed at zero energy */
+  moonAsked: 0,             /* the first empty pull warns; the second calls it up */
+  sixes: 0,                 /* the fuse — reset every time you actually sleep */
+  searched: {},             /* which hiding places you have already turned over tonight */
 };
 
 /* The stairwell. A hole in the floor you pay to dig, one step at a time —
@@ -62209,6 +62292,61 @@ const SHOVEL_USES  = 5;               /* digs before the shovel breaks and must 
 const SHOVEL_COST  = 45;              /* coins to forge or re-forge the shovel */
 const stairsBuilt = () => Math.min(DIG_MAX, game.dug);
 const canForge = () => game.builtShovel || game.parts >= SHOVEL_PARTS;
+
+/* ---- energy: one door for every spend ---------------------------------
+   Every sink in the room goes through this, so the "nothing left in you"
+   copy and the handoff to the bed live in exactly one place. */
+function spendEnergy(n, what) {
+  if (game.energy < n) {
+    toast(game.moon ? 'THE MOON WANTS THE LEVER AND NOTHING ELSE'
+                    : 'NOTHING LEFT IN YOU — ' + what + ' TAKES ' + n, 2600);
+    AUDIO.lose();
+    return false;
+  }
+  game.energy -= n;
+  syncHUD();
+  return true;
+}
+
+/* ---- blood moon -------------------------------------------------------- */
+function beginBloodMoon() {
+  if (game.moon) return;
+  game.moon = 1;
+  horror.dread = Math.min(1, horror.dread + 0.3);
+  scene.fog.color.setHex(0x1a0405);
+  toast('THE MOON COMES UP RED — THE PAYS GO FAT AND THE REELS GO WRONG', 4000);
+  paintTop('BLOOD MOON', '#ff2a2a');
+  AUDIO.sting(); AUDIO.whisper(); shakeCam(0.85);
+}
+
+function endBloodMoon() {
+  if (!game.moon) return;
+  game.moon = 0;
+  game.sixes = 0;
+  game.moonAsked = 0;
+  scene.fog.color.setHex(0x0e0705);
+  syncHUD();
+}
+
+/* one more six on the fuse. Returns false when it was the last one — the
+   caller must not go on and spin, because there is nobody left to spin. */
+function addSix() {
+  game.sixes++;
+  horror.dread = Math.min(1, horror.dread + 0.3);
+  AUDIO.sting(); shakeCam(0.45 + game.sixes * 0.2);
+  syncHUD();
+  if (game.sixes >= MOON_SIX) { sixSixSix(); return false; }
+  toast(game.sixes === 1 ? 'SIX' : 'SIX SIX — ONE MORE AND IT HAS YOUR NUMBER', 3000);
+  paintTop(('6 '.repeat(game.sixes) + '_ '.repeat(MOON_SIX - game.sixes)).trim(), '#ff2a2a');
+  return true;
+}
+
+function sixSixSix() {
+  if (game.runOver) return;
+  horror.sixDeath = 1;
+  paintTop('6 6 6', '#ff0000');
+  breakIn();
+}
 
 /* ---------------------------------------------------------------- [S-13]
    THE DECK. Tarot cards, dealt to you between nights — the only upgrades in
@@ -62536,6 +62674,7 @@ const el = {
   iiName: document.getElementById('iiName'),
   iiDesc: document.getElementById('iiDesc'),
   iiCost: document.getElementById('iiCost'),
+  fuse: document.getElementById('fuse'),
   itemShown: null,
 };
 
@@ -62552,13 +62691,32 @@ function syncHUD() {
   el.qbar.style.width = (pct * 100).toFixed(1) + '%';
   el.hudRound.classList.toggle('met', game.coins >= game.quota);
 
-  /* spins as pips — you read "three left" faster than you read a number */
-  const total = roundSpins();
+  /* energy as pips — you read "three left" faster than you read a number, and
+     a dig taking two of them off at once is the clearest way to show a rate */
+  const total = roundEnergy();
   if (el.pips.childElementCount !== total) {
     el.pips.innerHTML = '';
     for (let i = 0; i < total; i++) el.pips.appendChild(document.createElement('i'));
   }
-  [...el.pips.children].forEach((p, i) => p.classList.toggle('used', i >= game.spins));
+  [...el.pips.children].forEach((p, i) => p.classList.toggle('used', i >= game.energy));
+  el.pips.classList.toggle('spent', game.energy <= 0);
+
+  /* THE FUSE. Three sixes, and it only exists while the moon is up. It has to
+     be a countdown you can see filling — a random cursed symbol somewhere in
+     the reels would carry none of this. */
+  if (el.fuse) {
+    el.fuse.classList.toggle('on', !!game.moon);
+    if (game.moon && el.fuse.childElementCount !== MOON_SIX) {
+      el.fuse.innerHTML = '';
+      for (let i = 0; i < MOON_SIX; i++) {
+        const s = document.createElement('b');
+        s.textContent = '6';
+        el.fuse.appendChild(s);
+      }
+    }
+    if (game.moon) [...el.fuse.children].forEach((s, i) =>
+      s.classList.toggle('lit', i < game.sixes));
+  }
 
   const mine = myMachine ? myMachine.cards : [];
   if (el.buffs.childElementCount !== mine.length) {
@@ -62598,17 +62756,34 @@ function tryPull() {
   if (!focus.seated || focus.frozen || !myMachine || myMachine.reels.spinning) return;
   if (!horror.power) { toast('NO POWER — CHECK THE FUSEBOX', 2000); AUDIO.lose(); return; }
   if (game.runOver || game.settling) return;
-  if (game.spins <= 0) { toast('NO SPINS LEFT'); paintTop('EMPTY', '#ff3d3d'); return; }
   const cost = spinCost(myMachine);
+
+  /* THE REFUSAL. Empty, the honest move is the bed. Pulling anyway is how the
+     blood moon gets called up — and it takes two pulls to do it, so nobody
+     walks into overtime by leaning on the key. */
+  if (game.energy < COST.spin && !game.moon) {
+    if (!game.moonAsked) {
+      game.moonAsked = 1;
+      toast('THERE IS NOTHING LEFT IN YOU. THE BED IS THERE. PULL AGAIN AND THE MOON COMES UP.', 4600);
+      paintTop('SLEEP — OR PULL AGAIN', '#ff3d3d');
+      AUDIO.whisper();
+      return;
+    }
+    if (game.coins < cost) { toast('NOT EVEN ' + cost + ' LEFT', 2000); AUDIO.lose(); return; }
+    beginBloodMoon();
+  }
+
   if (game.coins < cost) {
     toast('NOT EVEN ' + cost + ' LEFT', 2000); AUDIO.lose(); return;
   }
+  /* under the moon a pull is free of energy and paid for in sixes instead */
+  if (game.moon) { if (!addSix()) return; }
+  else           { game.energy -= COST.spin; }
   game.coins -= cost;
   spin(myMachine);
 }
 
 function spin(m) {
-  game.spins--;
   syncHUD();
   m.reels.spinning = true;
   m.reels.wins = [];
@@ -62683,7 +62858,8 @@ function resolveSpin(m) {
   /* perClover cards fold into the same all-wins multiplier, so a clover hoard is
      worth something on every line rather than sitting unspent as reroll fuel */
   /* additive cards raise the base, `mult` cards multiply the lot */
-  const allBonus = (1 + buff(m, 'all') + buff(m, 'perClover')) * buffMult(m);
+  const allBonus = (1 + buff(m, 'all') + buff(m, 'perClover')) * buffMult(m)
+                 * (game.moon ? MOON_PAY : 1);
 
   for (const p of PATTERNS) {
     const mult = p.mult + buff(m, 'pat', p.id);
@@ -62756,7 +62932,14 @@ function resolveSpin(m) {
   }
 
   syncHUD();
-  if (game.spins <= 0) settleRound();
+  /* The night no longer ends itself. Running dry just means the only thing
+     left that costs nothing is lying down — and the bed is a thing you walk
+     to and press, so ending the night is a decision you make rather than a
+     counter hitting zero. Refusing it is the horror. */
+  if (game.energy <= 0 && !game.moon && !game.runOver) {
+    paintTop('EMPTY — THE BED', '#ffb524');
+    toast('NOTHING LEFT IN YOU — SLEEP IT OFF, OR DO NOT', 3200);
+  }
 }
 
 /* --- end of night: make the quota, or it comes through the door --- */
@@ -63535,10 +63718,15 @@ function placeCarried() {
    die: nothing to spend it on between shops. */
 function rerollShop() {
   if (game.clovers < 1) { AUDIO.lose(); return; }
-  const offerUp = !document.getElementById('offer').classList.contains('hide');
-  if (!shop.open && !offerUp) { AUDIO.lose(); return; }
+  if (!shop.open && !dream.on) { AUDIO.lose(); return; }
   game.clovers--;
-  if (offerUp) { dealTarot(); toast('OFFER REROLLED', 1600); syncHUD(); return; }
+  /* a clover buys a fresh spread without leaving the table — enterDream is
+     re-entrant, it clears the old fan and re-seats you at the same seat */
+  if (dream.on) {
+    dealTarot();
+    toast('SHE SWEEPS THEM UP AND DEALS AGAIN', 2200);
+    syncHUD(); return;
+  }
   openShop();
   toast('TRAY REROLLED', 1600);
   syncHUD();
@@ -63552,7 +63740,12 @@ function dealTarot() {
   /* while you still need shovel parts, one gets laid down with the spread —
      take the part and forgo the card, or take the card and stay chained longer */
   const needParts = myMachine && !game.builtShovel && game.parts < SHOVEL_PARTS;
-  if ((!pool.length && !needParts && !boonPool().length) || !myMachine) { advanceAfterTribute(); return; }
+  /* nothing left to deal — if this fired from a reroll we are already sitting
+     at her table, so go out through wake() or the body never comes back */
+  if ((!pool.length && !needParts && !boonPool().length) || !myMachine) {
+    if (dream.on) wake(); else advanceAfterTribute();
+    return;
+  }
 
   const cards = [];
   if (needParts) cards.push({ part: true });
@@ -63579,61 +63772,308 @@ function dealTarot() {
   }
   pick.forEach(c => cards.push({ card: c }));
 
-  const host = document.getElementById('offerCards');
-  host.innerHTML = '';
-  cards.forEach(card => {
-    const el = document.createElement('div');
-    el.className = 'card';
-    if (card.part) {
-      const got = Math.min(SHOVEL_PARTS, game.parts + 1);
-      el.className = 'card k-ESCAPE';
-      el.innerHTML = '<span class="k">ESCAPE</span>' +
-                     '<span class="n">SHOVEL PART</span>' +
-                     '<span class="d">A piece of a shovel. ' + got + ' / ' + SHOVEL_PARTS + ' once taken.</span>' +
-                     '<span class="pick">TAKE THE PART</span>';
-      el.addEventListener('click', () => {
-        game.parts = Math.min(SHOVEL_PARTS, game.parts + 1);
-        AUDIO.win(120);
-        toast(game.parts >= SHOVEL_PARTS ? 'ALL THREE PARTS — FORGE IT AT THE DIG'
-                                         : 'SHOVEL PART  ' + game.parts + ' / ' + SHOVEL_PARTS, 2600);
-        refreshStairs();
-        hideOverlay('offer');
-        advanceAfterTribute();
-        syncHUD();
-      });
-    } else {
-      const c = card.card;
-      /* The index and the "leads to" line are the whole point of the ladder —
-         without them an Ace reads as a weak card rather than the first rung of
-         something. Owned copies show too, for the stackables. */
-      const have = cardCount(c.id);
-      const next = TAROT.find(x => x.needs && x.needs.includes(c.id));
-      el.className = 'card k-' + c.kind;
-      el.innerHTML = '<span class="k">' + cardLabel(c) +
-                       (c.tier ? '<b class="tier">' + c.tier + '</b>' : '') + '</span>' +
-                     '<span class="n">' + c.name + '</span>' +
-                     '<span class="d">' + c.desc + '</span>' +
-                     (have ? '<span class="own">HELD ×' + have + '</span>' : '') +
-                     (next ? '<span class="lead">leads to ' + next.name + '</span>' : '') +
-                     '<span class="pick">' + (c.rev ? 'TAKE IT REVERSED' : 'TAKE — FREE') + '</span>';
-      el.addEventListener('click', () => {
-        myMachine.cards.push(c.id);
-        spawnCardToken(myMachine, c.id, myMachine.cards.length - 1);
-        refreshBoards();
-        AUDIO.win(140);
-        toast(c.name + (c.rev ? ' — REVERSED' : ' — DEALT'), 2400);
-        hideOverlay('offer');
-        advanceAfterTribute();
-        syncHUD();
-      });
-    }
-    host.appendChild(el);
+  enterDream(cards);
+}
+
+/* ---------------------------------------------------------------- [S-13b]
+   THE DREAM. The spread used to be a DOM overlay with the room frozen behind
+   it — four HTML boxes, a pointer, and no fiction at all for why the room was
+   suddenly handing you upgrades. Now sleeping puts you at a table somewhere
+   else, with something in a hat dealing to you, and you take one with the same
+   key you pull the lever with.
+
+   It is built at DREAM_AT, sixty metres out in the same scene. FogExp2 at
+   0.105 density is fully opaque long before that, so the room cannot see the
+   dream and the dream cannot see the room — no second scene, no second render
+   pass, nothing for the compositor to know about. */
+const DREAM_AT = new THREE.Vector3(0, 0, -60);
+const dream = {
+  on: false, group: null, cards: [], witch: null, motes: [],
+  flames: [], t: 0, dealT: 0,
+};
+
+function buildDreamRoom() {
+  const g = new THREE.Group();
+  const X = DREAM_AT.x, Z = DREAM_AT.z;
+
+  /* the void it happens in — a floor with nothing past its edge */
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(4.6, 28),
+    lam({ map: TEX.floor, color: 0x241a24 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(X, 0.001, Z);
+  g.add(floor);
+
+  /* the table: round, low, covered to the floor */
+  const cloth = lam({ map: TEX.stain, color: 0x4a2036 });
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.07, 20), cloth);
+  top.position.set(X, 0.95, Z); g.add(top);
+  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.90, 1.02, 0.92, 20, 1, true), cloth);
+  skirt.position.set(X, 0.48, Z); g.add(skirt);
+
+  /* Three candles, all on HER side of the cloth. They started with one on the
+     near edge, which put a lit wax column directly between the camera and the
+     middle of the spread — the one thing you are here to read. */
+  const wax = lam({ color: 0xd8c8a8 });
+  [[-0.70, -0.30], [0.70, -0.30], [0, -0.72]].forEach(([ox, oz]) => {
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.20, 7), wax);
+    stick.position.set(X + ox, 1.08, Z + oz); g.add(stick);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.11, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffcf6a, fog: false }));
+    flame.position.set(X + ox, 1.23, Z + oz); g.add(flame);
+    const L = new THREE.PointLight(0xffa848, 3.4, 3.6, 2);
+    L.position.set(X + ox, 1.30, Z + oz); g.add(L);
+    dream.flames.push({ flame, light: L, base: 3.4, phase: rand() * 6.3 });
   });
-  document.querySelector('#offer h2').textContent = 'IT DEALS YOU ONE';
-  document.querySelector('#offer .sub').innerHTML = needParts
-    ? 'One card, no charge — or a piece of your way out.<br>The reversed one gives more and takes more.'
-    : 'One card, no charge.<br>The reversed one gives more and takes more.';
-  showOverlay('offer');
+
+  /* ---- her. Nothing in the room is shaped like a person on purpose, so she
+     is built to read as one instantly and then be wrong about it: the hat and
+     the shoulders land first, and there is no face under the brim. ---- */
+  const w = new THREE.Group();
+  /* lifted well off black. At 0x241830 she was a black shape in an unlit void —
+     technically present, and completely invisible on screen. */
+  const robe  = lam({ map: TEX.wall, color: 0x5e4470 });
+  const robe2 = lam({ map: TEX.wall, color: 0x3d2b4e });
+  const skin  = lam({ color: 0xbfae94 });
+
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.52, 1.28, 11, 1), robe);
+  body.position.y = 0.64; w.add(body);
+  const shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.30, 12, 8), robe);
+  shoulders.scale.set(1.5, 0.62, 1.0); shoulders.position.y = 1.24; w.add(shoulders);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.16, 8), robe2);
+  neck.position.y = 1.36; w.add(neck);
+  /* the head is a cowl, not a head — the brim's shadow is the whole point */
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), robe2);
+  head.position.y = 1.51; w.add(head);
+  const face = new THREE.Mesh(new THREE.CircleGeometry(0.13, 12),
+    new THREE.MeshBasicMaterial({ color: 0x000000, fog: false }));
+  face.position.set(0, 1.49, 0.155); w.add(face);
+  /* two lights where the eyes would be, if there were any */
+  [-0.058, 0.058].forEach(ox => {
+    const eye = new THREE.Mesh(new THREE.CircleGeometry(0.026, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffe27a, fog: false }));
+    eye.position.set(ox, 1.505, 0.162); w.add(eye);
+  });
+  /* the hat: brim then point, and it is what makes her legible in one frame */
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.50, 0.035, 14), robe2);
+  brim.position.y = 1.62; w.add(brim);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.62, 12, 3), robe2);
+  cone.position.y = 1.92; cone.rotation.z = 0.16; w.add(cone);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.215, 0.06, 12), robe);
+  band.position.y = 1.66; w.add(band);
+
+  /* long hands resting on the cloth, one either side of the spread */
+  [-1, 1].forEach(s => {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.62, 7), robe);
+    arm.position.set(s * 0.30, 1.10, 0.30);
+    arm.rotation.set(1.15, 0, s * -0.34); w.add(arm);
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.15), skin);
+    hand.position.set(s * 0.40, 0.99, 0.60); w.add(hand);
+    for (let i = 0; i < 3; i++) {
+      const fg = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.009, 0.15, 5), skin);
+      fg.rotation.x = Math.PI / 2 + 0.12;
+      fg.position.set(s * 0.40 - 0.036 + i * 0.036, 0.985, 0.71); w.add(fg);
+    }
+  });
+
+  /* She sits across the table, facing the side you arrive on. NO y-rotation:
+     the face plane, the eyes and both hands are all built on local +Z, and the
+     camera arrives looking down -Z — so a 180 spin put her face and her hands
+     on the wrong side of her and left a blank hooded back staring at you. */
+  w.position.set(X, 0, Z - 1.16);
+  g.add(w); dream.witch = w;
+
+  /* One light for her alone, high and behind the candles. The candle points are
+     sized for the cloth and die well before they reach her, so without this she
+     reads as an empty chair — and the whole scene is her. */
+  const onHer = new THREE.PointLight(0xb890ff, 5.2, 4.2, 2);
+  onHer.position.set(X, 2.35, Z - 0.35);
+  g.add(onHer);
+  /* and a low cold one from her side, so the brim throws a shadow forward */
+  const rim = new THREE.PointLight(0x6a7cff, 2.6, 3.4, 2);
+  rim.position.set(X - 0.95, 1.55, Z - 1.75);
+  g.add(rim);
+  /* A lamp with no bulb, on YOUR side of the cloth. The candles all sit behind
+     the spread now, which lit the backs of the cards beautifully and left the
+     faces — the only thing you have to read here — in silhouette. */
+  const onCards = new THREE.PointLight(0xffc27a, 3.0, 2.6, 2);
+  onCards.position.set(X, 1.34, Z + 1.15);
+  g.add(onCards);
+
+  /* dust turning slowly in the candlelight, so the void is not simply empty */
+  /* fewer and bigger than the first pass: at 26 tiny spheres the low-res buffer
+     and the dither turned them into coloured screen noise rather than dust */
+  const moteMat = new THREE.MeshBasicMaterial({ color: 0xd8bd82, fog: false,
+    transparent: true, opacity: 0.42 });
+  for (let i = 0; i < 14; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.019, 5, 4), moteMat);
+    const a = rand() * 6.3, r = 0.8 + rand() * 1.9;
+    m.position.set(X + Math.cos(a) * r, 0.6 + rand() * 1.4, Z + Math.sin(a) * r);
+    g.add(m);
+    dream.motes.push({ m, a, r, y: m.position.y, sp: 0.06 + rand() * 0.14 });
+  }
+
+  g.visible = false;
+  scene.add(g);
+  dream.group = g;
+}
+
+/* lay the spread down on the table */
+function enterDream(cards) {
+  if (!dream.group) buildDreamRoom();
+  clearDreamCards();
+
+  const X = DREAM_AT.x, Z = DREAM_AT.z;
+  const n = cards.length;
+  cards.forEach((entry, i) => {
+    /* fanned across the near half of the cloth, standing up so the faces read
+       from where you are rather than from above */
+    const spread = Math.min(0.34, 1.5 / Math.max(1, n - 1));
+    const a = (i - (n - 1) / 2) * spread;
+    const R = 0.60;
+    const wrap = new THREE.Group();
+    let mesh;
+    if (entry.part) {
+      /* the shovel part is not a card and should not look like one */
+      mesh = new THREE.Group();
+      const steel = lam({ map: TEX.metal, color: 0x8a8278 });
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.26, 0.03), steel);
+      blade.position.y = 0.13; mesh.add(blade);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.115, 0.13, 4), steel);
+      tip.rotation.x = Math.PI; tip.position.y = -0.05; tip.rotation.y = Math.PI / 4;
+      mesh.add(tip);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.30, 6),
+        lam({ map: TEX.wood, color: 0x6b4a2c }));
+      shaft.position.y = 0.40; mesh.add(shaft);
+      mesh.scale.setScalar(1.15);
+    } else {
+      mesh = cardMesh(entry.card);
+      mesh.scale.setScalar(1.7);
+    }
+    wrap.add(mesh);
+    wrap.position.set(X + Math.sin(a) * R, 1.0, Z + 0.30 + Math.cos(a) * R * 0.42);
+    wrap.rotation.y = -a * 0.8;
+    /* dealt in, one at a time — dealT drives the slide-and-settle */
+    wrap.visible = false;
+    dream.group.add(wrap);
+    dream.cards.push({
+      entry, wrap,
+      world: wrap.position.clone(),
+      at: wrap.position.clone(),
+      in: 0, delay: 0.42 + i * 0.36,
+    });
+  });
+
+  dream.dealT = 0;
+  dream.on = true;
+  dream.group.visible = true;
+  /* The camera is LERPED between player.pos and the machine seat by
+     focus.blend, so any leftover blend drags the view back into the room no
+     matter where the body has been moved to. Land it flat before teleporting. */
+  focus.seated = false; focus.blend = 0; focus.machine = null;
+  player.pos.set(X, 1.62, Z + 2.05);
+  player.yaw = 0; player.pitch = -0.32;
+  player.vel.set(0, 0, 0);
+  paintTop('ASLEEP', '#7a6ab0');
+  toast('SOMETHING IS DEALING', 2600);
+  AUDIO.whisper();
+}
+
+function clearDreamCards() {
+  for (const c of dream.cards) dream.group.remove(c.wrap);
+  dream.cards.length = 0;
+}
+
+/* whichever card you are actually looking at, same test the tray uses */
+const _toDream = new THREE.Vector3();
+function aimedDreamCard() {
+  if (!dream.on) return null;
+  const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
+  let best = null, bestDot = 0.86;
+  for (const c of dream.cards) {
+    if (c.in < 0.9) continue;                      /* not landed yet */
+    const d = _toDream.copy(c.world).sub(player.pos).normalize().dot(fwd);
+    if (d > bestDot) { bestDot = d; best = c; }
+  }
+  return best;
+}
+
+function takeDreamCard() {
+  const c = aimedDreamCard();
+  if (!c) return;
+  if (c.entry.part) {
+    game.parts = Math.min(SHOVEL_PARTS, game.parts + 1);
+    AUDIO.win(120);
+    toast(game.parts >= SHOVEL_PARTS ? 'ALL THREE PARTS — FORGE IT AT THE DIRT'
+                                     : 'SHOVEL PART  ' + game.parts + ' / ' + SHOVEL_PARTS, 2800);
+    refreshStairs();
+  } else {
+    const card = c.entry.card;
+    myMachine.cards.push(card.id);
+    spawnCardToken(myMachine, card.id, myMachine.cards.length - 1);
+    refreshBoards();
+    AUDIO.win(140);
+    toast(card.name + (card.rev ? ' — REVERSED' : ' — DEALT'), 2600);
+  }
+  syncHUD();
+  wake();
+}
+
+function wake() {
+  if (!dream.on) return;
+  dream.on = false;
+  ui.fadeTarget = 1;
+  setTimeout(() => {
+    dream.group.visible = false;
+    clearDreamCards();
+    /* Back into the body, at the head of the cot facing into the room. Put at
+       the HEAD rather than the near side on purpose: the near side is closer to
+       the hole than to the bed, so you would wake up being offered a shovel. */
+    player.pos.set(BED_AT.x - 1.05, 1.62, BED_AT.z);
+    player.yaw = 0; player.pitch = 0;
+    player.vel.set(0, 0, 0);
+    ui.fadeTarget = 0;
+    advanceAfterTribute();
+  }, 900);
+}
+
+function updateDream(dt) {
+  if (!dream.group || !dream.group.visible) return;
+  dream.t += dt;
+
+  /* candle guttering — the only animation the void gets, and it does a lot */
+  for (const f of dream.flames) {
+    const k = 0.78 + Math.sin(dream.t * 9 + f.phase) * 0.12
+                   + Math.sin(dream.t * 23.7 + f.phase) * 0.07;
+    f.light.intensity = f.base * k;
+    f.flame.scale.set(1, 0.85 + k * 0.3, 1);
+  }
+  /* dust, drifting round her */
+  for (const p of dream.motes) {
+    p.a += dt * p.sp * 0.3;
+    p.m.position.set(DREAM_AT.x + Math.cos(p.a) * p.r,
+                     p.y + Math.sin(dream.t * p.sp + p.r) * 0.09,
+                     DREAM_AT.z + Math.sin(p.a) * p.r);
+  }
+  /* she breathes, and the hat lags behind it */
+  if (dream.witch) {
+    dream.witch.position.y = Math.sin(dream.t * 0.9) * 0.012;
+    dream.witch.rotation.y = Math.sin(dream.t * 0.31) * 0.05;
+  }
+
+  /* the deal: each card rises out of her hands and settles into the fan */
+  dream.dealT += dt;
+  for (const c of dream.cards) {
+    if (dream.dealT < c.delay) continue;
+    if (c.in >= 1) continue;
+    if (c.in === 0) { c.wrap.visible = true; if (AUDIO.started) AUDIO.leverClunk(); }
+    c.in = Math.min(1, c.in + dt * 3.4);
+    const k = c.in * c.in * (3 - 2 * c.in);            /* smoothstep */
+    c.wrap.position.lerpVectors(
+      _toDream.set(DREAM_AT.x, 1.02, DREAM_AT.z - 0.62), c.at, k);
+    c.wrap.position.y += Math.sin(k * Math.PI) * 0.16;  /* an arc, not a slide */
+    c.world.copy(c.wrap.position);
+    if (c.in >= 1) c.world.copy(c.at);
+  }
 }
 
 function advanceAfterTribute() {
@@ -63658,7 +64098,9 @@ function nextNight() {
   net.paidIds.clear();
   game.round++;
   game.quota = roundQuota(game.round);
-  game.spins = roundSpins();
+  game.energy = roundEnergy();
+  game.searched = {};                 /* the room refills its hiding places */
+  endBloodMoon();
   game.coins = Math.max(0, game.coins + buff(myMachine, 'head'));   /* DEEP POCKETS, HOLLOW HANDS */
   game.clovers += buff(myMachine, 'clovers');       /* GLEANER */
   game.coins   += buff(myMachine, 'cloverCoins') * game.clovers;   /* CLOVER BANK */
@@ -63681,7 +64123,11 @@ function resetRun() {
   game.coins = 0;
   game.clovers = 0;
   game.quota = roundQuota(1);
-  game.spins = BASE_SPINS;
+  game.energy = BASE_SPINS;
+  game.searched = {};
+  game.moon = 0; game.sixes = 0; game.moonAsked = 0;
+  horror.sixDeath = 0;
+  scene.fog.color.setHex(0x0e0705);
   horror.dread = 0.2;
   horror.doorTries = 0;
   /* stairFunded deliberately NOT reset — digging is the one thing that keeps */
@@ -64573,8 +65019,10 @@ function refreshStairs() {
 
 const _toStair = new THREE.Vector3();
 function nearStairs() {
-  /* it's a hole in the floor — proximity is enough, you stand right over it */
-  return Math.hypot(player.pos.x - STAIR_AT.x, player.pos.z - STAIR_AT.z) < 1.35;
+  /* it's a hole in the floor — proximity is enough, you stand right over it.
+     Tightened from 1.35: at that reach the dig owned the entire south-east
+     quadrant and swallowed the prompt for everything else put down there. */
+  return Math.hypot(player.pos.x - STAIR_AT.x, player.pos.z - STAIR_AT.z) < 1.05;
 }
 
 function fundStairs() {
@@ -64592,6 +65040,7 @@ function fundStairs() {
       toast('NEED ' + (SHOVEL_COST - game.coins) + ' MORE TO FORGE THE SHOVEL', 2400);
       AUDIO.lose(); return;
     }
+    if (!spendEnergy(COST.forge, 'FORGING')) return;
     game.coins -= SHOVEL_COST;
     if (!game.builtShovel) { game.parts = 0; game.builtShovel = true; }
     game.shovel = SHOVEL_USES;
@@ -64599,7 +65048,10 @@ function fundStairs() {
     toast('SHOVEL FORGED — ' + SHOVEL_USES + ' DIGS IN IT', 2400);
     refreshStairs(); syncHUD(); return;
   }
-  /* dig one step deeper, wearing the shovel down */
+  /* dig one step deeper, wearing the shovel down. Two energy — the most
+     expensive act in the room, and the reason a night spent digging is a
+     night you did not spend making the quota. */
+  if (!spendEnergy(COST.dig, 'A DIG')) return;
   game.shovel--;
   game.dug++;
   refreshStairs();
@@ -64611,6 +65063,180 @@ function fundStairs() {
     toast('THE SHOVEL SNAPS — ' + game.dug + ' / ' + DIG_MAX + ' DOWN', 2600);
   } else {
     toast('DEEPER — ' + game.dug + ' / ' + DIG_MAX, 1800);
+  }
+  syncHUD();
+}
+
+/* ---- the bed: the end-turn button, made out of furniture ---------------
+   A night used to end when a counter hit zero. Now it ends when you lie
+   down, which makes the whole loop a choice: the collector is coming either
+   way, and the only way to not face it tonight is to sleep. Refusing the bed
+   is what calls the moon up, so this cot is the single most important prop
+   in the room. */
+/* South-east corner, along the wall. The east wall looked free on the floor
+   plan and is not: the PATTERNS board hangs there, and that corner is also the
+   furthest point in the room from the bulb, so the cot sat unlit under a sign.
+   Here it is clear of every blocker and actually visible. It does share the
+   corner with the dig, and bedBeatsDig() below is what sorts that out. */
+const BED_AT = new THREE.Vector3(1.92, 0, 2.66);
+const bedding = { group: null, sheet: null };
+
+function buildBed() {
+  const g = new THREE.Group();
+  /* All three lifted well off the first pass. The bulb hangs at the middle of
+     the room and falls off with distance squared, so at wall-corner values the
+     cot was a black outline you could walk past — unacceptable for the one prop
+     that ends the night. */
+  const frame = lam({ map: TEX.metal, color: 0x8f8175 });
+  const cloth = lam({ map: TEX.stain, color: 0xc4b7a0 });
+  const wool  = lam({ map: TEX.wall,  color: 0x8c6248 });
+
+  /* iron cot: two rails, four legs, a sagging wire base */
+  const L = 1.86, W = 0.80;
+  [-1, 1].forEach(s => {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(L, 0.06, 0.05), frame);
+    rail.position.set(0, 0.40, s * (W / 2 - 0.03)); g.add(rail);
+  });
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.40, 0.055), frame);
+    leg.position.set(sx * (L / 2 - 0.05), 0.20, sz * (W / 2 - 0.03)); g.add(leg);
+  });
+  /* head and foot rails, the head one taller so it reads as a bed from behind */
+  [[-1, 0.66], [1, 0.34]].forEach(([sx, h]) => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, W), frame);
+    post.position.set(sx * (L / 2 - 0.02), h / 2, 0); g.add(post);
+    for (let i = 0; i < 4; i++) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, h * 0.82, 5), frame);
+      bar.position.set(sx * (L / 2 - 0.02), h / 2, -W / 2 + 0.14 + i * (W - 0.28) / 3);
+      g.add(bar);
+    }
+  });
+
+  /* the mattress, thin and dished in the middle where a body has been */
+  const mat = new THREE.Mesh(new THREE.BoxGeometry(L - 0.14, 0.13, W - 0.10), cloth);
+  mat.position.set(0, 0.475, 0); g.add(mat);
+  /* a blanket thrown over the foot half, and a flat grey pillow */
+  const sheet = new THREE.Mesh(new THREE.BoxGeometry(L * 0.52, 0.10, W - 0.04), wool);
+  sheet.position.set(L * 0.20, 0.53, 0); sheet.rotation.z = 0.02;
+  g.add(sheet); bedding.sheet = sheet;
+  const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.10, W - 0.22), cloth);
+  pillow.position.set(-L / 2 + 0.30, 0.56, 0); g.add(pillow);
+
+  /* and its own weak lamp, so the corner it lives in is somewhere you can see
+     to walk to. Low and warm — it should read as light leaking into the corner,
+     not as a spotlight on the furniture. */
+  const glow = new THREE.PointLight(0xffb070, 2.6, 3.0, 2);
+  glow.position.set(0, 1.05, -0.35);
+  g.add(glow);
+
+  g.position.copy(BED_AT);
+  scene.add(g); bedding.group = g;
+  blocker(BED_AT.x, BED_AT.z, L, W);
+}
+
+function nearBed() {
+  /* generous, no facing test, and horizontal only — you should never be
+     fighting the geometry to end a night */
+  return Math.hypot(player.pos.x - BED_AT.x, player.pos.z - BED_AT.z) < 1.5;
+}
+
+/* The cot and the hole are neighbours in the same corner, and their reaches
+   overlap. Fixed priority gets one of them wrong wherever you put it — either
+   you cannot sleep standing at the bed or you cannot dig standing over the
+   hole — so let the distance decide: E means whichever you are nearer to. */
+function bedBeatsDig() {
+  return Math.hypot(player.pos.x - BED_AT.x,   player.pos.z - BED_AT.z) <=
+         Math.hypot(player.pos.x - STAIR_AT.x, player.pos.z - STAIR_AT.z);
+}
+
+function sleep() {
+  if (game.runOver || game.settling || game.offering || shop.open) return;
+  if (dream.on) return;
+  endBloodMoon();
+  if (focus.seated) exitFocus();
+  toast('YOU LIE DOWN', 2000);
+  paintTop('ASLEEP', '#7a6ab0');
+  AUDIO.whisper();
+  ui.fadeTarget = 1;
+  /* black first, verdict second — waking up to the answer is the beat */
+  setTimeout(() => { ui.fadeTarget = 0; settleRound(); }, 1500);
+}
+
+/* ---- searching the room: the cheap sink, and where the parts come from --
+   Three hiding places, one energy each, once per night. This is the third
+   rate in the pool — without it "energy" would just be the spin counter
+   under a new name. */
+/* All three hang off furniture the room already had, and all three sit outside
+   every other interaction radius — the dirt heap and the underside of the cot
+   were the first picks and both lost to the dig and the bed respectively. */
+const SEARCH_SPOTS = [
+  { id: 'crates', at: new THREE.Vector3(3.28, 0.55, 2.35),  label: 'THE STACK OF CRATES' },
+  { id: 'crt',    at: new THREE.Vector3(3.42, 0.40, 1.45),  label: 'BEHIND THE DEAD SET' },
+  { id: 'corner', at: new THREE.Vector3(-3.05, 0.16, -1.65), label: 'THE DARK CORNER' },
+];
+
+function buildSearchSpots() {
+  const junk = lam({ map: TEX.wall, color: 0x3b2c22 });
+  /* only the corner needs anything built — the crates and the set are already
+     furniture, and a search prompt on real geometry reads better than a new
+     pile nobody believes in */
+  const s = SEARCH_SPOTS[2];
+  for (let i = 0; i < 7; i++) {
+    const bit = new THREE.Mesh(
+      i % 3 ? new THREE.BoxGeometry(0.26 + rand() * 0.3, 0.05, 0.09)
+            : new THREE.DodecahedronGeometry(0.05 + rand() * 0.04), junk);
+    bit.position.set(s.at.x + (rand() - 0.5) * 0.7, 0.03 + (i % 3) * 0.05,
+                     s.at.z + (rand() - 0.5) * 0.7);
+    bit.rotation.set(rand() * 0.3, rand() * 3, rand() * 0.3);
+    scene.add(bit);
+  }
+}
+
+const _toSpot = new THREE.Vector3();
+function nearSearchSpot() {
+  const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
+  for (const s of SEARCH_SPOTS) {
+    /* HORIZONTAL distance. These sit near the floor and the eye is at 1.62, so
+       a straight distanceTo() spent most of its budget on the height gap and
+       the prompt only appeared if you were standing on top of the thing. */
+    if (Math.hypot(player.pos.x - s.at.x, player.pos.z - s.at.z) > 1.4) continue;
+    const to = _toSpot.copy(s.at).sub(player.pos).normalize();
+    if (to.dot(fwd) > 0.3) return s;
+  }
+  return null;
+}
+
+function searchSpot() {
+  const s = nearSearchSpot();
+  if (!s) return;
+  if (game.searched[s.id]) { toast('NOTHING LEFT THERE TONIGHT', 1800); return; }
+  if (!spendEnergy(COST.search, 'A SEARCH')) return;
+  game.searched[s.id] = 1;
+  if (AUDIO.started) AUDIO.burst(0.3, 'lowpass', 420, 1, 0.2);
+
+  const needParts = !game.builtShovel && game.parts < SHOVEL_PARTS;
+  const r = Math.random();
+  /* while you still need parts, the room mostly gives you parts — the escape
+     should not be gated behind a coin flip you cannot influence */
+  if (needParts && r < 0.55) {
+    game.parts = Math.min(SHOVEL_PARTS, game.parts + 1);
+    AUDIO.win(120);
+    toast(game.parts >= SHOVEL_PARTS ? 'A SHOVEL PART — ALL THREE. FORGE IT AT THE DIRT.'
+                                     : 'A SHOVEL PART  ' + game.parts + ' / ' + SHOVEL_PARTS, 3000);
+  } else if (r < 0.72) {
+    const found = 8 + ((Math.random() * 22) | 0);
+    game.coins += found;
+    AUDIO.win(60);
+    toast('COINS IN THE DUST  +' + found, 2200);
+  } else if (r < 0.86) {
+    game.clovers++;
+    AUDIO.win(40);
+    toast('A DRY CLOVER, PRESSED FLAT', 2200);
+  } else {
+    horror.dread = Math.min(1, horror.dread + 0.18);
+    AUDIO.whisper();
+    toast('YOUR HAND FINDS SOMETHING WARM', 2600);
+    if (Math.random() < 0.35) showWatcher();
   }
   syncHUD();
 }
@@ -64720,6 +65346,11 @@ function cutPower() {
 
 function tryFuse() {
   if (!nearFuse()) return;
+  /* the room cutting your power is now a real theft — it costs you a pull to
+     put it back, which is what makes a blackout worth dreading. Under the moon
+     it is free: the moon wants you at that lever and will keep the lights on
+     to get you there. */
+  if (!game.moon && !spendEnergy(COST.fuse, 'THE FUSEBOX')) return;
   setPower(true);
   toast('POWER RESTORED', 1400);
   /* the payoff for making you walk across the room in the dark */
@@ -64876,6 +65507,13 @@ function updateHorror(dt) {
 
   /* vignette closes in with dread */
   compPass.mat.uniforms.uVig.value = 0.95 + horror.dread * 0.5;
+  /* the moon eases in and out rather than snapping, so calling it up feels like
+     something rising instead of a filter being toggled */
+  {
+    const u = compPass.mat.uniforms.uMoon;
+    const want = game.moon && !dream.on ? 1 : 0;
+    u.value += (want - u.value) * Math.min(1, dt * 1.4);
+  }
 
   /* --- the watcher --- */
   if (horror.watcher.visible) {
@@ -65002,8 +65640,13 @@ function breakIn() {
   game.runOver = true;
   horror.breakIn = 0.01;
   horror.dread = 1;
-  paintTop('TOO LATE', '#ff3d3d');
-  toast('YOU CAME UP SHORT', 2600);
+  if (horror.sixDeath) {
+    paintTop('6 6 6', '#ff0000');
+    toast('SIX SIX SIX — IT HAS YOUR NUMBER', 3400);
+  } else {
+    paintTop('TOO LATE', '#ff3d3d');
+    toast('YOU CAME UP SHORT', 2600);
+  }
   AUDIO.bang(4);
   exitFocus();
 }
@@ -66928,15 +67571,42 @@ function render() {
   renderer.render(compPass.scene, quadCam);
 }
 
+/* the most important line in the game, so it says exactly what happens */
+function bedLabel() {
+  if (game.offering || shop.open || game.settling) return 'NOT YET — IT IS AT THE DOOR';
+  if (game.moon)   return '[ E ] SLEEP — THE MOON GOES DOWN AND THE SIXES CLEAR';
+  if (game.coins >= game.quota)
+    return '[ E ] SLEEP — END NIGHT ' + game.round + ', QUOTA MET';
+  return '[ E ] SLEEP — YOU ARE ' + (game.quota - game.coins) + ' SHORT. IT WILL COME IN.';
+}
+
 function updatePrompt() {
   /* interaction prompt */
   let label = null;
-  if (focus.seated) {
+  /* nothing to offer once it has you — the old chain still cheerfully invited
+     you to play the machine while you were being dragged out of the door */
+  if (game.runOver) {
+    el.prompt.classList.remove('on');
+    el.itemInfo.classList.remove('on');
+    return;
+  }
+  if (dream.on) {
+    const c = aimedDreamCard();
+    label = c ? (c.entry.part ? '[ E ] TAKE THE PART'
+                              : '[ E ] TAKE ' + c.entry.card.name)
+              : 'TAKE ONE' + (game.clovers > 0 ? '     [ R ] A CLOVER FOR A NEW SPREAD' : '');
+  } else if (focus.seated) {
     const fm = focus.machine;
     if ((fm && fm.reels.spinning) || game.settling) label = '[ Q ] STAND UP';
     else if (!horror.power)              label = 'NO POWER     [ Q ] STAND UP';
-    else label = (game.spins > 0 ? '[ E ] PULL LEVER  (' + spinCost(myMachine) + ')' : '[ E ] NO SPINS LEFT') +
-                 '     [ Q ] STAND UP';
+    else if (game.moon)
+      label = '[ E ] PULL  (' + spinCost(myMachine) + ')  — ANOTHER SIX     [ Q ] STAND UP';
+    else if (game.energy >= COST.spin)
+      label = '[ E ] PULL LEVER  (' + spinCost(myMachine) + ')     [ Q ] STAND UP';
+    else
+      label = (game.moonAsked ? '[ E ] CALL THE MOON UP — THE FIRST SIX'
+                              : '[ E ] EMPTY — PULL ANYWAY?') +
+              '     [ Q ] STAND UP AND SLEEP';
   } else if (shop.open) {
     /* F always works, whether or not you are aimed at a figurine */
     const it = aimedShopItem();
@@ -66945,17 +67615,29 @@ function updatePrompt() {
             '[ F ] SEND IT AWAY';
   } else if (player.carrying && nearRack()) {
     label = '[ E ] PLACE ' + cardById(player.carrying).name + ' HERE';
+  } else if (nearBed() && bedBeatsDig()) {
+    label = bedLabel();
   } else if (nearStairs()) {
     if (game.dug >= DIG_MAX)   label = 'THE CHAIN WILL NOT LET YOU REACH ANY DEEPER';
-    else if (game.shovel > 0)  label = '[ E ] DIG   (SHOVEL ' + game.shovel + ')';
-    else if (canForge())       label = '[ E ] FORGE A SHOVEL — ' + SHOVEL_COST;
+    else if (game.shovel > 0)  label = '[ E ] DIG   (SHOVEL ' + game.shovel +
+                                       ')     COSTS ' + COST.dig + ' ENERGY';
+    else if (canForge())       label = '[ E ] FORGE A SHOVEL — ' + SHOVEL_COST +
+                                       '     COSTS ' + COST.forge + ' ENERGY';
     else                       label = '[ E ] DIG AT THE DIRT';
   } else if (nearFuse()) {
-    label = '[ E ] RESTORE POWER';
+    label = game.moon ? '[ E ] RESTORE POWER — THE MOON PAYS FOR IT'
+                      : '[ E ] RESTORE POWER     COSTS ' + COST.fuse + ' ENERGY';
+  } else if (nearBed()) {
+    label = bedLabel();
   } else if (nearMachine()) {
     const nm = nearMachine();
     label = !ownsMachine(nm) ? 'NOT YOUR MACHINE'
           : horror.power ? '[ E ] PLAY THE MACHINE' : 'NO POWER';
+  } else if (nearSearchSpot()) {
+    const s = nearSearchSpot();
+    label = game.searched[s.id]
+      ? 'YOU HAVE ALREADY BEEN THROUGH ' + s.label + ' TONIGHT'
+      : '[ E ] SEARCH ' + s.label + '     COSTS ' + COST.search + ' ENERGY';
   } else if (nearDoor()) {
     if (game.offering && !game.paid) {
       const n = playerCount();
@@ -66997,6 +67679,7 @@ function step(dt) {
   for (const mm of MACHINES) { updateReels(mm, dt); updateMachine(mm, dt); }
   updatePrompt();
   updateHorror(dt);
+  updateDream(dt);
   updateModels(dt);
   updateCardFX(dt);
   /* live clip time in the panel — cheap, and only while it's open */
@@ -67040,6 +67723,8 @@ function boot() {
   buildHorror();
   buildDressing();
   buildStairs();
+  buildBed();
+  buildSearchSpots();
   buildChains();
   loadDeliveredModels();
 
@@ -67065,9 +67750,10 @@ function boot() {
   horror.bulbMesh = bulbMesh;
 
   initUI();
-  document.getElementById('netNote').textContent = net.available()
-    ? 'co-op: share a room code — both of you type the same one'
-    : 'co-op needs the server (node server.js), not the standalone file';
+  /* co-op's entry point is gone — the relay and net.* are left in place because
+     they cost nothing sitting there, but nothing in the UI reaches them now */
+  const nn = document.getElementById('netNote');
+  if (nn) nn.textContent = '';
   addEventListener('keydown', e => {
     if (e.code === 'Escape' && ui.started && ui.blocking === 'menu') hideOverlay('menu');
   });
@@ -67085,7 +67771,11 @@ function boot() {
                  step, spin, nearMachine, nearDoor, nearFuse, tryDoor, tryFuse,
                  enterFocus, exitFocus, showWatcher, sendHallWalker, triggerBlackout,
                  cutPower, setPower, doorBang, windowKnock, escalate, jumpScare,
-                 settleRound, resetRun, roundQuota, roundSpins, breakIn,
+                 settleRound, resetRun, roundQuota, roundEnergy, breakIn,
+                 sleep, nearBed, BED_AT, spendEnergy, COST, dream, enterDream, wake,
+                 beginBloodMoon, endBloodMoon, addSix, searchSpot, SEARCH_SPOTS,
+                 tryPull, takeDreamCard, aimedDreamCard, syncHUD, nearSearchSpot,
+                 updatePrompt, interact, MOON_SIX, MOON_PAY,
                  beginOffer, refreshBoards, cardCost, buffMult, cardCount, dealTarot, cardPool, boonPool, spinCost, shop, payCollector, openShop, closeShop, cardMesh, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCard,
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
                  buildSkinnedFigure, figureSkin,
