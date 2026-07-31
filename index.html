@@ -78,10 +78,20 @@
        CRATES     COSTS 1 ENERGY" ran together into a single sentence */
     white-space:pre-wrap;max-width:80vw}
   #prompt.on{opacity:1}
-  #toast{position:absolute;left:50%;top:26%;transform:translateX(-50%);
-    font-size:clamp(22px,3.4vw,48px);color:#ff4df0;opacity:0;
-    text-shadow:0 0 18px #ff4df0,0 0 4px #fff;letter-spacing:2px;
-    text-align:center;white-space:nowrap}
+  /* THE NARRATOR. Was 48px of glowing magenta across the middle of the screen —
+     it sat on top of the machine, the witch's table and everything else you
+     were meant to be looking at, and it read as a rave flyer rather than as a
+     room talking to you. Now: tucked under the night counter, a horror face
+     where one is installed, and a dull bone colour that stays legible when the
+     blood moon turns the whole picture red without competing with it. */
+  #toast{position:absolute;left:50%;top:150px;transform:translateX(-50%);
+    font-family:Chiller,"Old English Text MT","Blackadder ITC",Papyrus,
+      "Bookman Old Style",Georgia,serif;
+    font-size:clamp(20px,2.4vw,34px);color:#cbb894;opacity:0;
+    text-shadow:0 2px 0 #000,0 0 12px rgba(0,0,0,.95),0 0 22px rgba(120,20,16,.5);
+    /* wraps rather than clipping — several lines are long sentences, and an
+       ellipsised warning is worse than a two-line one */
+    letter-spacing:2px;text-align:center;line-height:1.25;max-width:62vw}
 
   /* ---- dev tools panel (F1) ---- */
   #devPanel{position:absolute;left:12px;top:12px;display:none;z-index:29;
@@ -61917,7 +61927,10 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyQ') exitFocus();
   if (e.code === 'KeyR') rerollShop();
   if (e.code === 'KeyG') net.giveTo(25);
-  if (e.code === 'KeyF') { if (game.offering && game.paid) finishNight(); }
+  /* F IS GONE. It used to be "send the tray away" and it called finishNight(),
+     which now re-enters the witch — so holding F at her table dealt an entirely
+     fresh set of cards, free, as many times as you liked. The clover reroll on R
+     is the only way to see a new hand. */
   if (e.code === 'KeyM') toast(AUDIO.toggleMute() ? 'SOUND OFF' : 'SOUND ON', 900);
 });
 
@@ -62684,9 +62697,14 @@ for (const M of MAJORS) {
   const shared = { arcana: M.id, num: M.n, tier: M.n, name: M.name };
   _major.push({ ...shared, ...M.up,
                 id: 'maj_' + M.id, kind: 'MAJOR', pow: 2 });
+  /* REVERSED cards used to be the free end-of-night deal, hence cost 0. That
+     deal is gone, so they are priced now or they would simply never appear —
+     they are half the major arcana. Roughly double the upright's price: they
+     give more and take more, and she is not a charity. */
   _major.push({ ...shared, ...M.rev,
                 id: 'maj_' + M.id + '_r', kind: 'REVERSED',
-                rev: true, boon: true, cost: 0, pow: 3 });
+                rev: true, boon: true, pow: 3,
+                cost: Math.round((M.up.cost || 60) * 2.2) });
 }
 
 const TAROT = [..._minor, ..._major];
@@ -63131,12 +63149,17 @@ const shop = { open: false, items: [], group: null };
 
 /* Which cards are for sale tonight. Pulled out of the old door-slot shop so the
    witch's table and anything else can stock from the same rules. */
-function pickWares(n = 4) {
+function pickWares(n = 5) {
   const pool = cardPool();
-  if (!pool.length) return [];
+  const picks = [];
   /* clovers are luck: each one nudges the stock toward the rarer figures */
   const luck = Math.min(0.5, game.clovers * 0.02);
-  const picks = [];
+  /* ONE REVERSED CARD, always, if there is one to be had. They were the free
+     end-of-night deal and there is no free deal any more, so without a reserved
+     slot the entire reversed half of the major arcana would stop existing. */
+  const boons = boonPool();
+  if (boons.length) picks.push(boons[(Math.random() * boons.length) | 0]);
+  if (!pool.length) return picks;
   /* ALWAYS stock the scaling engine. The quota is exponential, so a run lives
      or dies on compounding — and leaving that to a random four-card draw meant
      a simulated run playing perfectly still starved out around night 6, having
@@ -63872,21 +63895,20 @@ function placeCarried() {
   syncHUD();
 }
 
-/* Clovers buy a fresh tray — and a freshly dealt spread too. The
-   offer used to be take-it-or-leave-it, which is where a clover hoard went to
-   die: nothing to spend it on between shops. */
+/* A clover buys her whole table over again. It is the only thing a clover hoard
+   is for between nights, and it costs one every time — the reroll used to be
+   reachable through the F key as well, for free and unlimited, which quietly
+   made the entire economy optional. */
 function rerollShop() {
-  if (game.clovers < 1) { AUDIO.lose(); return; }
-  if (!shop.open && !dream.on) { AUDIO.lose(); return; }
-  /* once the free card is taken the spread is gone, and a clover cannot buy back
-     a deal you have already made */
-  if (dream.on && dream.picked) { toast('YOU HAVE HAD YOUR CARD', 2000); AUDIO.lose(); return; }
+  if (!dream.on && !shop.open) { AUDIO.lose(); return; }
+  if (game.clovers < 1) {
+    toast('A CLOVER BUYS A NEW TABLE — YOU HAVE NONE', 2200); AUDIO.lose(); return;
+  }
   game.clovers--;
-  /* a clover buys a fresh spread without leaving the table — enterDream is
-     re-entrant, it clears the old fan and re-seats you at the same seat */
   if (dream.on) {
-    dealTarot();
-    toast('SHE SWEEPS THEM UP AND DEALS AGAIN', 2200);
+    /* enterDream is re-entrant: it clears the old stock and re-seats you */
+    visitWitch();
+    toast('SHE SWEEPS THEM UP AND LAYS OUT ANOTHER', 2400);
     syncHUD(); return;
   }
   openShop();
@@ -63894,48 +63916,16 @@ function rerollShop() {
   syncHUD();
 }
 
-/* THE SPREAD. Laid out once the collector has gone: take exactly one card and
-   the night turns over. It always holds one REVERSED card — the strong one,
-   and the only one whose price isn't money. */
-function dealTarot() {
-  const pool = cardPool();
-  /* while you still need shovel parts, one gets laid down with the spread —
-     take the part and forgo the card, or take the card and stay chained longer */
-  const needParts = DIGGING && myMachine && !game.builtShovel && game.parts < SHOVEL_PARTS;
-  /* nothing left to deal — if this fired from a reroll we are already sitting
-     at her table, so go out through wake() or the body never comes back */
-  if ((!pool.length && !needParts && !boonPool().length) || !myMachine) {
-    if (dream.on) wake(); else advanceAfterTribute();
-    return;
-  }
-
-  const cards = [];
-  if (needParts) cards.push({ part: true });
-  /* one reversed card, always, ahead of the rest — getting through a night has
-     to be worth something on its own and not just reset the counter */
-  const boons = boonPool();
-  if (boons.length) cards.push({ card: boons[(Math.random() * boons.length) | 0] });
-  /* Four laid down, and no two off the same suit or the same arcana. Grouping
-     by KIND used to do that job, but the deck only has three kinds now — while
-     an unweighted draw will happily deal the Ace, Seven and King of one suit,
-     which is one decision wearing three hats. */
-  const pick = [];
-  const byLine = {};
-  for (const c of pool) {
-    const line = c.arcana || c.suit || c.id;
-    (byLine[line] = byLine[line] || []).push(c);
-  }
-  const lines = Object.keys(byLine).sort(() => Math.random() - 0.5);
-  const ROOM = cards.length > (needParts ? 1 : 0) ? 3 : 4;   /* the reversed one took a slot */
-  for (const ln of lines) {
-    if (pick.length >= ROOM) break;
-    const bucket = byLine[ln];
-    pick.push(bucket[(Math.random() * bucket.length) | 0]);
-  }
-  pick.forEach(c => cards.push({ card: c }));
-
-  enterDream(cards);
+/* HER TABLE. Everything on it is for sale — there is no free card at the end of
+   a night any more. That deal was the last thing in the run you got without
+   paying for it, and with it gone the coins you are carrying at dawn are the
+   only thing that decides whether you get stronger. */
+function visitWitch() {
+  if (!myMachine) { if (dream.on) wake(); else advanceAfterTribute(); return; }
+  enterDream();
 }
+/* net.* and the dev handle still call the old name */
+function dealTarot() { visitWitch(); }
 
 /* ---------------------------------------------------------------- [S-13b]
    THE DREAM. The spread used to be a DOM overlay with the room frozen behind
@@ -63950,13 +63940,12 @@ function dealTarot() {
    pass, nothing for the compositor to know about. */
 const DREAM_AT = new THREE.Vector3(0, 0, -60);
 const dream = {
-  on: false, group: null, cards: [], witch: null, motes: [],
+  on: false, group: null, witch: null, motes: [],
   flames: [], t: 0, dealT: 0,
-  /* HER WARES. The collector used to run a tray of four buyable cards through
-     the door slot; that is hers now, and it happens here on the same cloth as
-     the free deal. Two arcs: the spread you take one of, nearer and lower, and
-     the ones she will sell you, behind it and raised on a step. */
-  wares: [], picked: false, waresLight: null,
+  /* HER WARES — and nothing else on the cloth. The collector used to run a tray
+     of buyable cards through the door slot and the night ended with one free
+     card dealt on top of that; both are gone. She deals a hand you pay for. */
+  wares: [], waresLight: null,
 };
 
 function buildDreamRoom() {
@@ -64096,42 +64085,17 @@ function buildDreamRoom() {
   dream.group = g;
 }
 
-/* lay the spread down on the table, and stand her wares up behind it */
-function enterDream(cards) {
+/* deal her stock out onto the cloth. All of it is for sale. */
+function enterDream() {
   if (!dream.group) buildDreamRoom();
   clearDreamCards();
 
   const X = DREAM_AT.x, Z = DREAM_AT.z;
-  const n = cards.length;
-  cards.forEach((entry, i) => {
-    /* fanned across the near half of the cloth, standing up so the faces read
-       from where you are rather than from above */
-    const spread = Math.min(0.34, 1.5 / Math.max(1, n - 1));
-    const a = (i - (n - 1) / 2) * spread;
-    const R = 0.60;
-    const wrap = new THREE.Group();
-    const mesh = cardMesh(entry.card);
-    mesh.scale.setScalar(1.7);
-    wrap.add(mesh);
-    wrap.position.set(X + Math.sin(a) * R, 1.0, Z + 0.40 + Math.cos(a) * R * 0.42);
-    wrap.rotation.y = -a * 0.8;
-    /* dealt in, one at a time — dealT drives the slide-and-settle */
-    wrap.visible = false;
-    dream.group.add(wrap);
-    dream.cards.push({
-      entry, wrap,
-      world: wrap.position.clone(),
-      at: wrap.position.clone(),
-      in: 0, delay: 0.42 + i * 0.36,
-    });
-  });
-
-  /* ---- her wares. Built now, shown later: they wait off-stage until the free
-     card has been taken, then stand up on the SAME arc the spread just left, so
-     every one of them is unoccluded and lit when it matters. ---- */
-  const stock = pickWares(4);
+  const stock = pickWares(5);
   const wn = stock.length;
   stock.forEach((c, i) => {
+    /* fanned across the near half of the cloth, standing up so the faces read
+       from where you are rather than from above */
     const wrap = new THREE.Group();
     const mesh = cardMesh(c);
     mesh.scale.setScalar(1.7);
@@ -64146,16 +64110,17 @@ function enterDream(cards) {
     const spread = Math.min(0.34, 1.5 / Math.max(1, wn - 1));
     const a = (i - (wn - 1) / 2) * spread;
     const R = 0.60;
-    wrap.position.set(X + Math.sin(a) * R, 1.0, Z + 0.40 + Math.cos(a) * R * 0.42);
+    const at = new THREE.Vector3(X + Math.sin(a) * R, 1.0,
+                                 Z + 0.40 + Math.cos(a) * R * 0.42);
+    wrap.position.copy(at);
     wrap.rotation.y = -a * 0.8;
+    /* dealt in one at a time — dealT drives the arc-and-settle */
     wrap.visible = false;
     dream.group.add(wrap);
     dream.wares.push({ card: c, wrap, tag, sold: false,
-                       world: wrap.position.clone(), in: 0, delay: i * 0.17 });
+                       world: at.clone(), at, in: 0, delay: 0.42 + i * 0.30 });
   });
 
-  dream.picked = false;
-  dream.sellT = 0;
   dream.dealT = 0;
   dream.on = true;
   dream.group.visible = true;
@@ -64167,77 +64132,34 @@ function enterDream(cards) {
   player.yaw = 0; player.pitch = -0.32;
   player.vel.set(0, 0, 0);
   paintTop('ASLEEP', '#7a6ab0');
-  toast('SHE DEALS. TAKE ONE — AND SHE WILL SELL YOU THE REST.', 3600);
+  toast('SHE DEALS A HAND. EVERYTHING ON THE CLOTH HAS A PRICE.', 3600);
   AUDIO.whisper();
 }
 
 function clearDreamCards() {
-  for (const c of dream.cards) dream.group.remove(c.wrap);
   for (const w of dream.wares) dream.group.remove(w.wrap);
-  dream.cards.length = 0;
   dream.wares.length = 0;
 }
 
-/* whichever card you are actually looking at, same test the old tray used */
+/* whichever of her cards you are actually looking at */
 const _toDream = new THREE.Vector3();
-function aimedDreamCard() {
-  if (!dream.on || dream.picked) return null;
-  const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
-  let best = null, bestDot = 0.90;
-  for (const c of dream.cards) {
-    if (c.in < 0.9) continue;                      /* not landed yet */
-    const d = _toDream.copy(c.world).sub(player.pos).normalize().dot(fwd);
-    if (d > bestDot) { bestDot = d; best = c; }
-  }
-  return best;
-}
-
-/* and whichever of her wares. Kept separate from the free spread so the two can
-   never be confused for one another — one costs nothing and ends the deal, the
-   other costs coins and does not. */
 function aimedDreamWare() {
-  /* not until the deal is done — before that they are not even on the cloth */
-  if (!dream.on || !dream.picked) return null;
+  if (!dream.on) return null;
   const fwd = _fwd.set(0, 0, -1).applyEuler(camera.rotation);
-  let best = null, bestDot = 0.94;
+  let best = null, bestDot = 0.92;
   for (const w of dream.wares) {
-    if (w.sold || w.in < 0.9) continue;
+    if (w.sold || w.in < 0.9) continue;            /* not landed yet */
     const d = _toDream.copy(w.world).sub(player.pos).normalize().dot(fwd);
     if (d > bestDot) { bestDot = d; best = w; }
   }
   return best;
 }
 
-/* one key, and the free spread wins ties — you should never buy by accident */
+/* one key: buy what you are looking at, or wake if you are looking at nothing */
 function dreamInteract() {
-  const c = aimedDreamCard();
-  if (c) { takeDreamCard(c); return; }
   const w = aimedDreamWare();
   if (w) { buyDreamWare(w); return; }
-  if (dream.picked) wake();
-  else toast('TAKE ONE OFF THE CLOTH FIRST', 2200);
-}
-
-function takeDreamCard(c) {
-  if (!c || dream.picked) return;
-  const card = c.entry.card;
-  myMachine.cards.push(card.id);
-  spawnCardToken(myMachine, card.id, myMachine.cards.length - 1);
-  refreshBoards();
-  AUDIO.win(140);
-  toast(card.name + (card.rev ? ' — REVERSED' : ' — DEALT'), 2600);
-  dream.picked = true;
-  /* the rest of the spread is swept up, and what she will SELL you takes its
-     place on the same cloth — the deal, then the sale, never both at once */
-  for (const other of dream.cards) dream.group.remove(other.wrap);
-  dream.cards.length = 0;
-  dream.sellT = 0;
-  if (dream.wares.some(w => !w.sold)) {
-    setTimeout(() => {
-      if (dream.on) toast('AND THESE SHE WILL SELL YOU', 2800);
-    }, 700);
-  }
-  syncHUD();
+  wake();
 }
 
 function buyDreamWare(w) {
@@ -64270,22 +64192,86 @@ function wake() {
        the HEAD rather than the near side on purpose: the near side is closer to
        the hole than to the bed, so you would wake up being offered a shovel. */
     player.pos.set(BED_AT.x - 1.05, 1.62, BED_AT.z);
-    player.yaw = 0; player.pitch = 0;
+    /* facing THE DOOR, not the room — it is about to walk up and hammer on it
+       and the whole point is that you wake up looking at the thing */
+    player.yaw = Math.atan2(-(DOOR_AT.x - player.pos.x), -(DOOR_AT.z - player.pos.z));
+    player.pitch = 0;
     player.vel.set(0, 0, 0);
     advanceAfterTribute();
     /* You come up out of the dark, not into daylight. The screen holds most of
-       the way black and it is a KNOCK that clears it — the same sound that will
-       end the night is what starts it, which is the whole shape of the loop. */
-    ui.fade = 1; ui.fadeTarget = 0.55;
-    setTimeout(() => {
-      if (game.runOver) { ui.fadeTarget = 0; return; }
-      AUDIO.bang(2.2);
-      horror.doorShake = 0.8;
-      shakeCam(0.3);
-      ui.fadeTarget = 0;
-      toast('IT KNOCKS. NIGHT ' + game.round + '.', 3000);
-    }, 1100);
+       the way black and it is the COLLECTOR that clears it: it walks the
+       corridor up to your door and hammers on it until you are on your feet.
+       The same thing that ends a night is what starts the next one. */
+    ui.fade = 1; ui.fadeTarget = 0.62;
+    if (game.runOver) { ui.fadeTarget = 0; return; }
+    startWakeKnock();
+    /* safety net: if it somehow never reaches the door, do not leave the player
+       staring at a black screen */
+    setTimeout(() => { if (!dream.on && ui.fadeTarget > 0) ui.fadeTarget = 0; }, 7000);
   }, 900);
+}
+
+/* ---- the wake-up call --------------------------------------------------
+   Not a sound effect: the actual model walks the lane to the hatch and knocks.
+   updateCollectorWalk already knows how to bring it in — it just needed a
+   second reason to want to be at the door besides being owed money. */
+const WAKE_BANGS = 3;
+function startWakeKnock() {
+  horror.wakeKnock = 1;
+  horror.wakeBangs = 0;
+  horror.wakeT = 0;
+  horror.wakeGiveUp = 0;
+  /* the pair at the slot, so there is no question what woke you. The door end
+     of the room is unlit and the barred window is small — without these the
+     whole beat happens in the dark and reads as a sound effect. */
+  horror.eyesT = 1;
+  /* and a lamp out in the corridor behind it. The south end of the room has no
+     light of its own, so a shape stood at the hatch was rendering into pure
+     black — this backlights it through the bars for exactly as long as it is
+     there, and goes out with it. */
+  if (!horror.hallLamp) {
+    horror.hallLamp = new THREE.PointLight(0xffa858, 0, 3.4, 2);
+    scene.add(horror.hallLamp);
+  }
+  horror.hallLamp.position.set(DOOR_AT.x, 1.55, ROOM.d / 2 + 0.62);
+}
+
+function updateWakeKnock(dt) {
+  /* the corridor lamp eases both ways, so it never pops on or off */
+  if (horror.hallLamp) {
+    const want = horror.wakeKnock ? 5.5 : 0;
+    horror.hallLamp.intensity += (want - horror.hallLamp.intensity) * Math.min(1, dt * 2.2);
+  }
+  if (!horror.wakeKnock) return;
+  horror.wakeT += dt;
+  horror.wakeGiveUp += dt;
+
+  const c = horror.collector;
+  const door = horror.collectorDoor;
+  /* it has to actually GET there before it can knock on anything */
+  const there = !c || !door ||
+    (Math.abs(c.position.x - door.x) < 0.30 && Math.abs(c.position.z - door.z) < 0.30);
+
+  if (there && horror.wakeT > (horror.wakeBangs ? 0.62 : 0.25)) {
+    horror.wakeT = 0;
+    horror.wakeBangs++;
+    /* heavier than a nagging knock — this one is meant to get you up */
+    AUDIO.bang(2.0 + horror.wakeBangs * 0.45);
+    horror.doorShake = 1;
+    shakeCam(0.26 + horror.wakeBangs * 0.10);
+    if (horror.wakeBangs === 1) {
+      ui.fadeTarget = 0;
+      toast('IT IS AT THE DOOR. NIGHT ' + game.round + '.', 3200);
+      paintTop('NIGHT ' + game.round, '#ffb524');
+    }
+  }
+  /* done, or it never got there — either way stop wanting the door so it can
+     walk back off down the passage */
+  if (horror.wakeBangs >= WAKE_BANGS || horror.wakeGiveUp > 8) {
+    horror.wakeKnock = 0;
+    horror.eyesT = 0;
+    ui.fadeTarget = 0;
+  }
 }
 
 function updateDream(dt) {
@@ -64314,29 +64300,16 @@ function updateDream(dt) {
 
   /* the deal: each card rises out of her hands and settles into the fan */
   dream.dealT += dt;
-  for (const c of dream.cards) {
-    if (dream.dealT < c.delay) continue;
-    if (c.in >= 1) continue;
-    if (c.in === 0) { c.wrap.visible = true; if (AUDIO.started) AUDIO.leverClunk(); }
-    c.in = Math.min(1, c.in + dt * 3.4);
-    const k = c.in * c.in * (3 - 2 * c.in);            /* smoothstep */
-    c.wrap.position.lerpVectors(
-      _toDream.set(DREAM_AT.x, 1.02, DREAM_AT.z - 0.62), c.at, k);
-    c.wrap.position.y += Math.sin(k * Math.PI) * 0.16;  /* an arc, not a slide */
-    c.world.copy(c.wrap.position);
-    if (c.in >= 1) c.world.copy(c.at);
-  }
-  /* her wares rise once the deal is done, onto the arc the spread just left */
-  if (dream.picked) {
-    dream.sellT += dt;
-    for (const w of dream.wares) {
-      if (w.sold || dream.sellT < w.delay || w.in >= 1) continue;
-      if (w.in === 0) { w.wrap.visible = true; if (AUDIO.started) AUDIO.leverClunk(); }
-      w.in = Math.min(1, w.in + dt * 3.0);
-      const k = w.in * w.in * (3 - 2 * w.in);
-      w.wrap.scale.setScalar(0.5 + 0.5 * k);
-      w.wrap.position.y = w.world.y - (1 - k) * 0.22;
-    }
+  for (const w of dream.wares) {
+    if (w.sold || dream.dealT < w.delay || w.in >= 1) continue;
+    if (w.in === 0) { w.wrap.visible = true; if (AUDIO.started) AUDIO.leverClunk(); }
+    w.in = Math.min(1, w.in + dt * 3.4);
+    const k = w.in * w.in * (3 - 2 * w.in);            /* smoothstep */
+    w.wrap.position.lerpVectors(
+      _toDream.set(DREAM_AT.x, 1.02, DREAM_AT.z - 0.62), w.at, k);
+    w.wrap.position.y += Math.sin(k * Math.PI) * 0.16;  /* an arc, not a slide */
+    w.world.copy(w.wrap.position);
+    if (w.in >= 1) w.world.copy(w.at);
   }
 }
 
@@ -65707,6 +65680,7 @@ function updateHorror(dt) {
   updateBreakIn(dt);
   updateHallWalk(dt);
   updateCollectorWalk(dt);
+  updateWakeKnock(dt);
 
   /* The collection clock. It STOPS while the moon is up — out there the threat
      is the fuse, and running a countdown as well made overtime unreadable. It
@@ -67377,7 +67351,9 @@ function updateCollectorWalk(dt) {
   const c = horror.collector;
   if (!c || !horror.collectorSeat) return;
 
-  const wantDoor = !!(game.offering && !game.paid && !game.runOver);
+  /* two reasons to be at the door: it is owed money, or it is coming to bang
+     you awake for the next night */
+  const wantDoor = !!((game.offering && !game.paid && !game.runOver) || horror.wakeKnock);
 
   /* Two-leg path so it crosses the window sideways before turning in. Coming:
      walk the lane to the door's x, THEN step up to the hatch. Going: back off
@@ -67877,15 +67853,14 @@ function updatePrompt() {
     return;
   }
   if (dream.on) {
-    const c = aimedDreamCard(), w = aimedDreamWare();
-    if (c)            label = '[ E ] TAKE ' + c.entry.card.name + ' — FREE';
-    else if (w)       label = '[ E ] BUY ' + w.card.name + ' — ' + cardCost(w.card) +
-                              (game.coins < cardCost(w.card) ? '  (YOU HAVE ' + game.coins + ')' : '');
-    else if (!dream.picked)
-      label = 'TAKE ONE OFF THE CLOTH' +
-              (game.clovers > 0 ? '     [ R ] A CLOVER FOR A NEW SPREAD' : '');
-    else label = '[ E ] WAKE' + (dream.wares.some(x => !x.sold)
-                 ? '     — OR BUY WHAT IS LEFT ON THE STEP' : '');
+    const w = aimedDreamWare();
+    const reroll = game.clovers > 0 ? '     [ R ] A CLOVER FOR A NEW HAND' : '';
+    if (w) label = '[ E ] BUY ' + w.card.name + ' — ' + cardCost(w.card) +
+                   (game.coins < cardCost(w.card) ? '  (YOU HAVE ' + game.coins + ')' : '') +
+                   reroll;
+    else   label = '[ E ] WAKE' +
+                   (dream.wares.some(x => !x.sold) ? '     — OR LOOK AT WHAT SHE HAS' : '') +
+                   reroll;
   } else if (focus.seated) {
     const fm = focus.machine;
     if ((fm && fm.reels.spinning) || game.settling) label = '[ Q ] STAND UP';
@@ -67947,12 +67922,10 @@ function updatePrompt() {
   if (label) el.prompt.textContent = label;
 
   /* the inspector: what the card you're looking at actually does */
-  /* The inspector now reads whatever card you are aimed at, wherever it is: the
-     old door tray, her wares, or the free spread on the cloth. Buying blind was
-     the one thing that made the move to a 3D shop worse than the DOM overlay. */
-  const aimedW = dream.on ? aimedDreamWare() : null;
-  const aimedC = dream.on ? aimedDreamCard() : null;
-  const looked = aimedShopItem() || aimedW || (aimedC ? { card: aimedC.entry.card, free: 1 } : null);
+  /* The inspector reads whatever card you are aimed at, wherever it is — the
+     old door tray or her table. Buying blind was the one thing that made the
+     move to a 3D shop worse than the DOM overlay it replaced. */
+  const looked = aimedShopItem() || (dream.on ? aimedDreamWare() : null);
   el.itemInfo.classList.toggle('on', !!looked && player.locked);
   if (looked && el.itemShown !== looked.card.id) {
     el.itemShown = looked.card.id;
@@ -67965,10 +67938,9 @@ function updatePrompt() {
     const have = cardCount(c.id);
     el.iiDesc.textContent = c.desc + (have ? '   (held x' + have + ')' : '') +
                             (nxt ? '   → unlocks ' + nxt.name : '');
-    el.iiCost.textContent = looked.free ? 'FREE' : cardCost(c);
+    el.iiCost.textContent = cardCost(c);
   }
-  if (looked) el.itemInfo.classList.toggle('poor',
-    !looked.free && game.coins < cardCost(looked.card));
+  if (looked) el.itemInfo.classList.toggle('poor', game.coins < cardCost(looked.card));
   if (!looked) el.itemShown = null;
 }
 
@@ -68072,7 +68044,7 @@ function boot() {
                  resetRun, roundQuota, roundEnergy, breakIn,
                  sleep, nearBed, BED_AT, spendEnergy, COST, dream, enterDream, wake,
                  beginBloodMoon, endBloodMoon, addSix, searchSpot, SEARCH_SPOTS,
-                 tryPull, takeDreamCard, aimedDreamCard, syncHUD, nearSearchSpot,
+                 tryPull, visitWitch, syncHUD, nearSearchSpot, startWakeKnock,
                  updatePrompt, interact, MOON_SIX, MOON_PAY, DIGGING,
                  collectorArrives, collectorKnock, nightDim, sixChance, pickWares,
                  aimedDreamWare, buyDreamWare, dreamInteract, BOARD_SYMBOLS,
