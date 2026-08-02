@@ -62230,14 +62230,27 @@ document.addEventListener('mousemove', e => {
     return;
   }
   if (!player.locked || focus.frozen || ui.blocking) return;
-  player.yaw   -= e.movementX * 0.0022 * ui.sens;
-  player.pitch -= e.movementY * 0.0022 * ui.sens;
+  /* Pointer lock hands out RAW deltas, and the browser delivers a monster first
+     event when lock engages — the whole distance the cursor travelled while it
+     was unlocked arrives as one movementX. At the top look speed that is several
+     full turns in a single frame, which is the view "jumping somewhere else";
+     land it on the pitch clamp and you are stuck staring at the ceiling with no
+     idea which way the room went. Swallow the first couple of events after a
+     lock, and cap the rest at something a hand can actually produce. */
+  if (player.lockFresh > 0) { player.lockFresh--; return; }
+  const mx = clamp(e.movementX || 0, -LOOK_MAX, LOOK_MAX);
+  const my = clamp(e.movementY || 0, -LOOK_MAX, LOOK_MAX);
+  player.yaw   -= mx * 0.0022 * ui.sens;
+  player.pitch -= my * 0.0022 * ui.sens;
   player.pitch = clamp(player.pitch, -1.35, 1.35);
 });
+const LOOK_MAX = 160;   /* px of raw pointer delta accepted from one event */
 
 document.addEventListener('pointerlockchange', () => {
   player.locked = document.pointerLockElement === canvas;
-  if (player.locked) return;
+  /* the next two mousemoves are the browser flushing however far the cursor
+     wandered while it was free — see LOOK_MAX above */
+  if (player.locked) { player.lockFresh = 2; return; }
   releaseKeys();
   /* The title screen has no pointer lock BY DESIGN — you need a cursor to press
      its buttons and to poke the bulb — so losing lock there is not an event. */
@@ -63371,6 +63384,23 @@ function resolveSpin(m) {
    turned overtime into a coin-flip nobody could read. */
 const COLLECT_SECONDS = 45;
 
+/* Has it actually walked up to the hatch yet? Nothing may knock before this is
+   true — it was hammering on the door from halfway down the corridor, which is
+   both nonsense and why the knocks seemed to come from nowhere.
+
+   This reads updateCollectorWalk's OWN arrival flag rather than measuring the
+   distance again: that flag already knows the difference between "near the
+   door" and "arrived and stopped", and a second, looser test would have gone
+   true while it was still striding the last half-metre. Falls back to a plain
+   distance check, and finally to TRUE, so a model that never loaded cannot mute
+   the most important sound in the game. */
+function atTheDoor() {
+  if (horror.collectorAtDoor !== undefined) return !!horror.collectorAtDoor;
+  const c = horror.collector, d = horror.collectorDoor;
+  if (!c || !d) return true;
+  return Math.abs(c.position.x - d.x) < 0.32 && Math.abs(c.position.z - d.z) < 0.32;
+}
+
 function collectorArrives() {
   if (game.offering || game.paid || game.runOver) return;
   game.offering = true;
@@ -63379,9 +63409,12 @@ function collectorArrives() {
      can actually cross the room in */
   game.collectT = Math.max(24, COLLECT_SECONDS + buff(myMachine, 'timer'));
   horror.eyesT = 1;
+  horror.knockT = 0;
   horror.dread = Math.min(1, horror.dread + 0.12);
-  collectorKnock();
-  toast('SOMETHING IS AT THE DOOR. IT WANTS THE NIGHT\'S TAKE.', 3400);
+  /* NO KNOCK HERE. It is still down the corridor at this point; it knocks when
+     it gets to the door, and updateHorror's timer is what notices. */
+  AUDIO.whisper();
+  toast('SOMETHING IS COMING FOR THE NIGHT\'S TAKE', 3400);
   paintTop('GO TO THE DOOR', '#ffb524');
 }
 
@@ -63389,15 +63422,23 @@ function collectorArrives() {
    hard-capped: the point is a door getting steadily more insistent over a
    night, not a jump-scare ladder that tops out in ten seconds. */
 function collectorKnock() {
+  /* it cannot knock on a door it has not reached */
+  if (!atTheDoor()) return false;
+  /* and it has one fist. The timer and every blood-moon pull were both calling
+     this, landing on the same frames and stacking into a drum roll. */
+  if (horror.lastKnock !== undefined && elapsed - horror.lastKnock < 0.55) return false;
+  horror.lastKnock = elapsed;
   game.knocks = (game.knocks || 0) + 1;
   const k = Math.min(1, (game.knocks - 1) / 9);        /* 0 -> 1 over 10 knocks */
   AUDIO.bang(1.4 + k * 1.9);
   horror.doorShake = Math.min(1, 0.45 + k * 0.55);
   shakeCam(0.10 + k * 0.28);
   horror.dread = Math.min(1, horror.dread + 0.02 + k * 0.04);
+  if (game.knocks === 1)  toast('IT IS AT THE DOOR', 2200);
   if (game.knocks === 4)  toast('IT KNOCKS AGAIN', 1800);
   if (game.knocks === 8)  toast('IT IS NOT GOING AWAY', 2200);
   if (game.knocks === 12) toast('THE FRAME IS GIVING', 2400);
+  return true;
 }
 
 /* kept as a thin alias: net.* and the dev panel both still call this name */
@@ -64534,13 +64575,8 @@ function updateWakeKnock(dt) {
   horror.wakeT += dt;
   horror.wakeGiveUp += dt;
 
-  const c = horror.collector;
-  const door = horror.collectorDoor;
   /* it has to actually GET there before it can knock on anything */
-  const there = !c || !door ||
-    (Math.abs(c.position.x - door.x) < 0.30 && Math.abs(c.position.z - door.z) < 0.30);
-
-  if (there && horror.wakeT > (horror.wakeBangs ? 0.62 : 0.25)) {
+  if (atTheDoor() && horror.wakeT > (horror.wakeBangs ? 0.62 : 0.25)) {
     horror.wakeT = 0;
     horror.wakeBangs++;
     /* heavier than a nagging knock — this one is meant to get you up */
@@ -66075,11 +66111,19 @@ function updateHorror(dt) {
         if (!net.connected || !net.everyonePaid()) breakIn();
       }
     }
-    /* a knock every few seconds for as long as it is owed, closing up as the
-       clock runs down so the last stretch is genuinely hurried */
-    const gap = game.moon ? 3.4 : 1.6 + Math.max(0, game.collectT) * 0.07;
-    horror.knockT = (horror.knockT || 0) + dt;
-    if (horror.knockT >= gap) { horror.knockT = 0; collectorKnock(); }
+    /* A knock every few seconds for as long as it is owed, closing up as the
+       clock runs down so the last stretch is genuinely hurried. The clock only
+       runs once it is AT the door — otherwise the gap elapsed while it was still
+       walking and it hammered the instant it arrived, then again immediately. */
+    if (atTheDoor()) {
+      const gap = game.moon ? 3.4 : 1.6 + Math.max(0, game.collectT) * 0.07;
+      horror.knockT = (horror.knockT || 0) + dt;
+      if (horror.knockT >= gap) { horror.knockT = 0; collectorKnock(); }
+    } else {
+      /* primed, so the very first frame it reaches the hatch is a knock rather
+         than another four seconds of silence after the walk */
+      horror.knockT = 99;
+    }
   } else {
     horror.knockT = 0;
   }
@@ -68755,6 +68799,19 @@ const scareFlashEl = document.getElementById('scareFlash');
 
 function step(dt) {
   elapsed += dt;
+  /* SELF-HEAL. ui.blocking gates mouse look AND every interaction key, and it is
+     only ever cleared by hideOverlay() being called with the same id that set
+     it. Two overlays opening in sequence — which the blur, visibility and
+     lock-error handlers can all cause — left it naming an overlay that was
+     already hidden, and the result is a player who cannot look around and
+     cannot press anything, with nothing on screen to explain why. */
+  if (ui.blocking) {
+    const el = document.getElementById(ui.blocking);
+    if (!el || el.classList.contains('hide')) {
+      ui.blocking = null;
+      if (ui.started && !ui.inMenu) requestLock();
+    }
+  }
   updatePlayer(dt);
   updateMenuScene(dt);
   for (const mm of MACHINES) { updateReels(mm, dt); updateMachine(mm, dt); }
@@ -68860,6 +68917,7 @@ function boot() {
                  tryPull, visitWitch, syncHUD, nearSearchSpot, startWakeKnock,
                  updatePrompt, interact, MOON_SIX, MOON_PAY, DIGGING,
                  collectorArrives, collectorKnock, nightDim, sixChance, pickWares,
+                 atTheDoor, LOOK_MAX,
                  aimedDreamWare, buyDreamWare, dreamInteract, BOARD_SYMBOLS,
                  beginOffer, refreshBoards, cardCost, buffMult, cardCount, dealTarot, cardPool, boonPool, spinCost, shop, payCollector, openShop, closeShop, cardMesh, buyAimed, rerollShop, finishNight, aimedShopItem, nextNight, buff, hasCard,
                  showOverlay, hideOverlay, togglePause, net, previewCharacter, clearCharacterPreview, CHARACTERS, animatePrisoner,
