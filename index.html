@@ -192,6 +192,14 @@
       rgba(0,0,0,0) 0%, rgba(0,0,0,.22) 52%, rgba(0,0,0,.78) 100%)}
   /* the game HUD has no business being up on the title screen */
   body.menuing #hud,body.menuing #prompt,body.menuing #toast{display:none}
+  /* GIVE THE CURSOR BACK. #view is cursor:none because in play the mouse is
+     pointer-locked and the crosshair is the pointer — but the menu is clicked
+     with a real cursor, and most of the screen is bare canvas, so without this
+     you are aiming at buttons with an invisible mouse. */
+  body.menuing #view{cursor:default}
+  /* and it turns into a hand over the bulb, which is the only thing in the room
+     you can actually touch */
+  body.menuing.on-bulb #view{cursor:pointer}
   .mm-inner{position:relative;display:flex;flex-direction:column;align-items:center;
     gap:6px;text-align:center;margin-left:-14vw}
   .mm-title{font-size:clamp(46px,9vw,120px);letter-spacing:10px;color:#d8c199;
@@ -62211,6 +62219,14 @@ document.addEventListener('mousemove', e => {
   if (ui.inMenu) {
     menu3d.mx = (e.clientX / window.innerWidth) * 2 - 1;
     menu3d.my = (e.clientY / window.innerHeight) * 2 - 1;
+    /* hover state for the bulb — one ray against two objects, cheap enough to
+       run on every move, and it is the only affordance telling you the light is
+       a thing you can touch */
+    const over = menuPick(e.clientX, e.clientY) === 'bulb';
+    if (over !== menu3d.hoverBulb) {
+      menu3d.hoverBulb = over;
+      document.body.classList.toggle('on-bulb', over);
+    }
     return;
   }
   if (!player.locked || focus.frozen || ui.blocking) return;
@@ -68605,7 +68621,8 @@ function enterMenuScene() {
 function leaveMenuScene() {
   ui.inMenu = false;
   if (menu3d.group) menu3d.group.visible = false;
-  document.body.classList.remove('menuing');
+  menu3d.hoverBulb = false;
+  document.body.classList.remove('menuing', 'on-bulb');
   AUDIO.menuBed(false);
 }
 
